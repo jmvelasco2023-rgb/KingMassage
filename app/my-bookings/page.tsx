@@ -5,7 +5,7 @@ import { BookingsList } from '@/components/bookings/bookings-list'
 import { Calendar } from 'lucide-react'
 
 export const metadata = {
-  title: 'My Bookings | Serenity Touch',
+  title: 'My Bookings | King Massage Therapy',
   description: 'View and manage your massage therapy bookings.',
 }
 
@@ -17,11 +17,16 @@ export default async function MyBookingsPage() {
     redirect('/auth/login?redirect=/my-bookings')
   }
 
-  const { data: bookings } = await supabase
+  // Fetch user's bookings ordered by date (newest first)
+  const { data: bookings, error } = await supabase
     .from('bookings')
     .select('*')
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
+    .order('date', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching bookings:', error)
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
