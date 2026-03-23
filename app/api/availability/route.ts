@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { addMinutes, format, setHours, setMinutes } from 'date-fns'
+import { addMinutes, format, setHours, setMinutes, isAfter } from 'date-fns'
 
 // Business hours: 8:30 AM to 3:00 AM next day
 const WORKING_HOURS_START_HOUR = 8
 const WORKING_HOURS_START_MINUTE = 30
-const SLOT_INTERVAL = 90 // 1 hour gap between slots
+const WORKING_HOURS_END_HOUR = 3
+const WORKING_HOURS_END_MINUTE = 0
+const SLOT_INTERVAL = 60 // 1 hour gap between slots
 
 // Generate all possible time slots for a day
 function generateTimeSlots(): string[] {
@@ -14,9 +16,20 @@ function generateTimeSlots(): string[] {
   // Start time: 8:30 AM
   let currentTime = setMinutes(setHours(new Date(), WORKING_HOURS_START_HOUR), WORKING_HOURS_START_MINUTE)
   
-  // Generate 19 slots (covers 8:30 AM to 3:00 AM next day = ~18.5 hours)
-  for (let i = 0; i < 19; i++) {
-    slots.push(format(currentTime, 'h:mm a'))
+  // End time: 3:00 AM next day
+  // We'll add 18.5 hours worth of 60-minute slots (8:30 AM to 3:00 AM = 18 hours 30 minutes)
+  const maxSlots = 18 // This gives us slots up to 2:30 AM, and 3:00 AM would be the last one
+
+  for (let i = 0; i <= maxSlots; i++) {
+    const timeStr = format(currentTime, 'h:mm a')
+    
+    // Stop at 3:00 AM
+    if (currentTime.getHours() === WORKING_HOURS_END_HOUR && currentTime.getMinutes() === WORKING_HOURS_END_MINUTE) {
+      slots.push(timeStr)
+      break
+    }
+    
+    slots.push(timeStr)
     currentTime = addMinutes(currentTime, SLOT_INTERVAL)
   }
 
