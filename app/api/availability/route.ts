@@ -2,20 +2,29 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { addMinutes, format, parse, isBefore, isAfter, setHours, setMinutes } from 'date-fns'
 
-// Configurable working hours (9 AM to 6 PM)
-const WORKING_HOURS_START = 9
-const WORKING_HOURS_END = 18
-const SLOT_INTERVAL = 60 // minutes
+// Configurable working hours (8:30 AM to 3:00 AM next day)
+const WORKING_HOURS_START_HOUR = 8
+const WORKING_HOURS_START_MINUTE = 30
+const WORKING_HOURS_END_HOUR = 3
+const WORKING_HOURS_END_MINUTE = 0
+const SLOT_INTERVAL = 60 // minutes (1 hour gap between slots)
 
 // Generate all possible time slots for a day
 function generateTimeSlots(): string[] {
   const slots: string[] = []
-  let currentTime = setMinutes(setHours(new Date(), WORKING_HOURS_START), 0)
-  const endTime = setMinutes(setHours(new Date(), WORKING_HOURS_END), 0)
+  
+  // Start time: 8:30 AM
+  let currentTime = setMinutes(setHours(new Date(), WORKING_HOURS_START_HOUR), WORKING_HOURS_START_MINUTE)
+  
+  // End time: 3:00 AM (which is 27 hours from 8:30 AM previous day)
+  // We'll generate slots until we reach 3:00 AM
+  let slotCount = 0
+  const maxSlots = 19 // 8:30 AM to 3:00 AM is approximately 18.5 hours, so 18 slots of 1 hour each
 
-  while (isBefore(currentTime, endTime)) {
+  while (slotCount < maxSlots) {
     slots.push(format(currentTime, 'h:mm a'))
     currentTime = addMinutes(currentTime, SLOT_INTERVAL)
+    slotCount++
   }
 
   return slots
