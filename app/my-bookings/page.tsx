@@ -17,16 +17,25 @@ export default async function MyBookingsPage() {
     redirect('/auth/login?redirect=/my-bookings')
   }
 
-  // Fetch user's bookings ordered by date (newest first)
+  console.log('Current user ID:', user.id)
+
+  // Fetch ALL bookings first to debug
+  const { data: allBookings, error: allError } = await supabase
+    .from('bookings')
+    .select('*')
+
+  console.log('All bookings in database:', allBookings)
+  console.log('Error fetching all bookings:', allError)
+
+  // Fetch user's bookings
   const { data: bookings, error } = await supabase
     .from('bookings')
     .select('*')
     .eq('user_id', user.id)
     .order('date', { ascending: false })
 
-  if (error) {
-    console.error('Error fetching bookings:', error)
-  }
+  console.log('User bookings:', bookings)
+  console.log('Error fetching user bookings:', error)
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -42,6 +51,13 @@ export default async function MyBookingsPage() {
               <h1 className="text-2xl font-bold">My Bookings</h1>
               <p className="text-sm text-muted-foreground">View and manage your appointments</p>
             </div>
+          </div>
+
+          {/* Debug info */}
+          <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+            <p><strong>Your User ID:</strong> {user.id}</p>
+            <p><strong>Total bookings found:</strong> {bookings?.length || 0}</p>
+            {error && <p className="text-red-600"><strong>Error:</strong> {error.message}</p>}
           </div>
           
           <BookingsList bookings={bookings || []} userId={user.id} />
