@@ -5,12 +5,12 @@ interface BookingStore {
   currentStep: number
   formData: BookingFormData
   setStep: (step: number) => void
-  nextStep: () => void
-  prevStep: () => void
   updateFormData: (data: Partial<BookingFormData>) => void
   resetForm: () => void
+  calculateTotalDuration: () => number
 }
 
+// Define initial form data with new add-on fields
 const initialFormData: BookingFormData = {
   name: '',
   mobile: '',
@@ -20,19 +20,38 @@ const initialFormData: BookingFormData = {
   time: '',
   duration: 60,
   extraMinutes: 0,
-  // NEW SPECIAL REQUEST FIELDS ADDED HERE
   pressurePreference: 'no-preference',
   focusArea: 'full-body',
   additionalNeeds: 'none',
   specialRequests: '',
+  // New add-on fields
+  addOnService: 'None',
+  addOnPrice: 0,
 }
 
-export const useBookingStore = create<BookingStore>((set) => ({
+export const useBookingStore = create<BookingStore>((set, get) => ({
   currentStep: 1,
   formData: initialFormData,
-  setStep: (step) => set({ currentStep: step }),
-  nextStep: () => set((state) => ({ currentStep: Math.min(state.currentStep + 1, 4) })),
-  prevStep: () => set((state) => ({ currentStep: Math.max(state.currentStep - 1, 1) })),
-  updateFormData: (data) => set((state) => ({ formData: { ...state.formData, ...data } })),
-  resetForm: () => set({ currentStep: 1, formData: initialFormData }),
+  
+  // Set current step in booking flow
+  setStep: (step: number) => set({ currentStep: Math.max(1, Math.min(step, 4)) }),
+  
+  // Update form data (supports partial updates)
+  updateFormData: (data: Partial<BookingFormData>) => set((state) => ({
+    formData: { ...state.formData, ...data }
+  })),
+  
+  // Reset form to initial state
+  resetForm: () => set({
+    currentStep: 1,
+    formData: initialFormData
+  }),
+  
+  // Calculate total duration including add-on time
+  calculateTotalDuration: () => {
+    const { duration, extraMinutes, addOnService } = get().formData
+    // Add 15 mins if add-on is selected (except 'None')
+    const addOnTime = addOnService !== 'None' ? 15 : 0
+    return duration + extraMinutes + addOnTime
+  }
 }))
