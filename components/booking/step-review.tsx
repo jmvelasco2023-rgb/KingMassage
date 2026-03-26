@@ -5,20 +5,24 @@ import { supabase } from '@/lib/supabase' // Import Supabase client
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Calendar, Clock, User, CheckCircle, AlertCircle } from 'lucide-react'
-import toast from 'react-hot-toast' // For clean notifications (no URL prefix)
+import { useState } from 'react' // Added for modal state
 
-// Install react-hot-toast first: npm install react-hot-toast
 export function StepReview() {
   const { formData, resetForm } = useBookingStore()
   const { calculateTotalDuration } = useBookingStore()
   const totalDuration = calculateTotalDuration()
 
+  // State to control custom modal
+  const [showModal, setShowModal] = useState(false)
+  const [modalText, setModalText] = useState('')
+  const [isSuccess, setIsSuccess] = useState(false)
+
   // Calculate pricing (adjust base prices as needed)
   const BASE_SERVICE_PRICES = {
     Swedish: 600,
-    Shiatsu: 650,
-    Thai: 700,
-    Combination: 750
+    Shiatsu: 600,
+    Thai: 600,
+    Combination: 600
   }
   const basePrice = BASE_SERVICE_PRICES[formData.service as keyof typeof BASE_SERVICE_PRICES] || 0
   const extraTimePrice = formData.extraMinutes === 15 ? 100 : formData.extraMinutes === 30 ? 200 : 0
@@ -30,7 +34,9 @@ export function StepReview() {
     try {
       // Validate required fields
       if (!formData.name || !formData.mobile || !formData.date || !formData.time) {
-        toast.error('Please complete all required fields: Name, Mobile, Date, and Time')
+        setModalText('Please complete all required fields: Name, Mobile, Date, and Time')
+        setIsSuccess(false)
+        setShowModal(true)
         return
       }
 
@@ -62,12 +68,21 @@ export function StepReview() {
 
       if (error) throw new Error(error.message || 'Failed to save booking')
       
-      toast.success('Booking submitted successfully! We’ll contact you shortly.')
+      setModalText('Booking submitted successfully! We’ll contact you shortly.')
+      setIsSuccess(true)
+      setShowModal(true)
       resetForm() // Reset form after success
     } catch (err: any) {
       console.error('Submission Error:', err) // Log to debug
-      toast.error(`Booking failed: ${err.message || 'Please try again later'}`)
+      setModalText(`Booking failed: ${err.message || 'Please try again later'}`)
+      setIsSuccess(false)
+      setShowModal(true)
     }
+  }
+
+  // Close modal function
+  const closeModal = () => {
+    setShowModal(false)
   }
 
   return (
@@ -186,10 +201,31 @@ export function StepReview() {
         </Button>
       </div>
 
-      {/* Add toast provider (add to your root layout if not already present) */}
-      <div className="hidden">
-        <toast.Toaster position="top-center" />
-      </div>
+      {/* CUSTOM BUILT-IN MODAL - No Libraries Needed */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+            <div className="flex justify-center mb-4">
+              {isSuccess ? (
+                <CheckCircle className="h-12 w-12 text-green-500" />
+              ) : (
+                <AlertCircle className="h-12 w-12 text-red-500" />
+              )}
+            </div>
+            <h3 className="text-lg font-semibold text-center mb-2">
+              {isSuccess ? 'Success!' : 'Oops, Something Went Wrong'}
+            </h3>
+            <p className="text-center text-gray-600 mb-6">{modalText}</p>
+            <Button 
+              className="w-full" 
+              onClick={closeModal}
+              variant={isSuccess ? 'default' : 'outline'}
+            >
+              {isSuccess ? 'Done' : 'Try Again'}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
