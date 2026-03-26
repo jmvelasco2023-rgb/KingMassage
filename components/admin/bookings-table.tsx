@@ -314,138 +314,140 @@ export function BookingsTable({ bookings }: BookingsTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {bookings.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                  No bookings found
-                </TableCell>
-              </TableRow>
-            ) : (
-              bookings.map(booking => {
-                const baseEarnings = earningsInputs[booking.id] || DEFAULT_SERVICE_EARNINGS[booking.service as keyof typeof DEFAULT_SERVICE_EARNINGS] || 0
-                const addOnTotal = (booking.add_ons?.reduce((sum: number, addOn: any) => sum + addOn.price, 0) || 0)
-                const totalEarnings = baseEarnings + addOnTotal
+  {bookings.length === 0 ? (
+    <TableRow>
+      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+        No bookings found
+      </TableCell>
+    </TableRow>
+  ) : (
+    bookings.map((booking) => {
+      const baseEarnings = earningsInputs[booking.id] || DEFAULT_SERVICE_EARNINGS[booking.service as keyof typeof DEFAULT_SERVICE_EARNINGS] || 0
+      const addOnTotal = (booking.add_ons?.reduce((sum: number, addOn: any) => sum + addOn.price, 0) || 0)
+      const totalEarnings = baseEarnings + addOnTotal
 
-                return (
-                  <TableRow key={booking.id}>
-                    <TableCell>
-                      <div className="font-medium">{booking.name}</div>
-                      <div className="text-sm text-muted-foreground">{booking.users.email}</div>
-                    </TableCell>
-                    <TableCell>{booking.service}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {booking.add_ons && booking.add_ons.length > 0 ? (
-                          booking.add_ons.map((addOn: any, idx: number) => (
-                            <div key={idx} className="flex items-center justify-between gap-2 bg-muted/50 p-1 rounded text-sm">
-                              <div>
-                                <span className="font-medium">{addOn.name}</span> - ₱{addOn.price.toLocaleString('en-PH')}
-                                {addOn.is_custom && <Badge className="ml-1 bg-blue-100 text-blue-800 text-xs">Custom</Badge>}
-                              </div>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-6 w-6 p-0"
-                                onClick={() => handleRemoveAddOn(booking.id, idx)}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ))
-                        ) : (
-                          <span className="text-muted-foreground text-sm">No add-ons</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>{new Date(booking.created_at).toLocaleDateString('en-PH')}</div>
-                      <div className="text-sm text-muted-foreground">{booking.time}</div>
-                    </TableCell>
-                    <TableCell>{getStatusBadge(booking.status)}</TableCell>
-                    <TableCell>
-                      {booking.status === 'completed' ? (
-                        <div className="font-medium">₱{totalEarnings.toLocaleString('en-PH')}</div>
-                      ) : (
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1">
-                            <DollarSign size={16} />
-                            <Input
-                              type="number"
-                              min="0"
-                              placeholder="Base amount"
-                              value={baseEarnings || ''}
-                              onChange={(e) => handleInputChange(booking.id, 'earnings', e.target.value)}
-                              className="w-24 text-sm"
-                            />
-                          </div>
-                          {booking.add_ons && booking.add_ons.length > 0 && (
-                            <div className="text-xs text-muted-foreground">
-                              + Add-ons: ₱{addOnTotal.toLocaleString('en-PH')}
-                            </div>
-                          )}
-                          <Input
-                            placeholder="Notes (optional)"
-                            value={notesInputs[booking.id] || ''}
-                            onChange={(e) => handleInputChange(booking.id, 'notes', e.target.value)}
-                            className="w-full text-xs"
-                          />
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-2">
-                        {/* Add Add-On Button */}
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="gap-1"
-                          onClick={() => {
-                            setSelectedBookingForAddOn(booking.id)
-                            setShowAddOnDialog(true)
-                          }}
-                          disabled={booking.status === 'completed' || updatingId === booking.id}
-                        >
-                          <Package className="h-3 w-3" /> Add-On
-                        </Button>
-
-                        {/* Status Actions */}
-                        {booking.status === 'pending' && (
-                          <>
-                            <Button
-                              size="sm"
-                              onClick={() => updateStatus(booking.id, 'approved')}
-                              disabled={updatingId === booking.id}
-                            >
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => updateStatus(booking.id, 'rejected')}
-                              disabled={updatingId === booking.id}
-                            >
-                              Reject
-                            </Button>
-                          </>
-                        )}
-                        {booking.status === 'approved' && (
-                          <Button
-                            size="sm"
-                            onClick={() => completeBooking(booking.id)}
-                            disabled={updatingId === booking.id || !earningsInputs[booking.id]}
-                          >
-                            {updatingId === booking.id ? 'Processing...' : 'Complete'}
-                          </Button>
-                        )}
-                        {booking.status === 'completed' && (
-                          <Badge className="bg-emerald-100 text-emerald-800">Finalized</Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+      return (
+        <TableRow key={booking.id}>
+          <TableCell>
+            <div className="font-medium">{booking.name}</div>
+            <div className="text-sm text-muted-foreground">{booking.users.email}</div>
+          </TableCell>
+          <TableCell>{booking.service}</TableCell>
+          <TableCell>
+            <div className="space-y-1">
+              {booking.add_ons && booking.add_ons.length > 0 ? (
+                booking.add_ons.map((addOn: any, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between gap-2 bg-muted/50 p-1 rounded text-sm">
+                    <div>
+                      <span className="font-medium">{addOn.name}</span> - ₱{addOn.price.toLocaleString('en-PH')}
+                      {addOn.is_custom && <Badge className="ml-1 bg-blue-100 text-blue-800 text-xs">Custom</Badge>}
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6 p-0"
+                      onClick={() => handleRemoveAddOn(booking.id, idx)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))
+              ) : (
+                <span className="text-muted-foreground text-sm">No add-ons</span>
               )}
-            </TableBody>
+            </div>
+          </TableCell>
+          <TableCell>
+            <div>{new Date(booking.created_at).toLocaleDateString('en-PH')}</div>
+            <div className="text-sm text-muted-foreground">{booking.time}</div>
+          </TableCell>
+          <TableCell>{getStatusBadge(booking.status)}</TableCell>
+          <TableCell>
+            {booking.status === 'completed' ? (
+              <div className="font-medium">₱{totalEarnings.toLocaleString('en-PH')}</div>
+            ) : (
+              <div className="space-y-1">
+                <div className="flex items-center gap-1">
+                  <DollarSign size={16} />
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="Base amount"
+                    value={baseEarnings || ''}
+                    onChange={(e) => handleInputChange(booking.id, 'earnings', e.target.value)}
+                    className="w-24 text-sm"
+                  />
+                </div>
+                {booking.add_ons && booking.add_ons.length > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    + Add-ons: ₱{addOnTotal.toLocaleString('en-PH')}
+                  </div>
+                )}
+                <Input
+                  placeholder="Notes (optional)"
+                  value={notesInputs[booking.id] || ''}
+                  onChange={(e) => handleInputChange(booking.id, 'notes', e.target.value)}
+                  className="w-full text-xs"
+                />
+              </div>
+            )}
+          </TableCell>
+          <TableCell>
+            <div className="flex flex-wrap gap-2">
+              {/* Add Add-On Button */}
+              <Button
+                size="sm"
+                variant="secondary"
+                className="gap-1"
+                onClick={() => {
+                  setSelectedBookingForAddOn(booking.id)
+                  setShowAddOnDialog(true)
+                }}
+                disabled={booking.status === 'completed' || updatingId === booking.id}
+              >
+                <Package className="h-3 w-3" /> Add-On
+              </Button>
+
+              {/* Status Actions */}
+              {booking.status === 'pending' && (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={() => updateStatus(booking.id, 'approved')}
+                    disabled={updatingId === booking.id}
+                  >
+                    Approve
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => updateStatus(booking.id, 'rejected')}
+                    disabled={updatingId === booking.id}
+                  >
+                    Reject
+                  </Button>
+                </>
+              )}
+              {booking.status === 'approved' && (
+                <Button
+                  size="sm"
+                  onClick={() => completeBooking(booking.id)}
+                  disabled={updatingId === booking.id || !earningsInputs[booking.id]}
+                >
+                  {updatingId === booking.id ? 'Processing...' : 'Complete'}
+                </Button>
+              )}
+              {booking.status === 'completed' && (
+                <Badge className="bg-emerald-100 text-emerald-800">Finalized</Badge>
+              )}
+            </div>
+          </TableCell>
+        </TableRow>
+      )
+    }) // Line 446: ONLY ")" HERE – no extra "}" or ")"
+  )}
+</TableBody>
+
           </Table>
         </div>
 
