@@ -443,7 +443,7 @@ export function BookingsTable({ bookings }: BookingsTableProps) {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                ))}
               )}
             </TableBody>
           </Table>
