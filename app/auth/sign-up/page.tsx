@@ -31,6 +31,13 @@ export default function Page() {
     setIsLoading(true)
     setError(null)
 
+    // Add password strength check (optional but recommended)
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long')
+      setIsLoading(false)
+      return
+    }
+
     if (password !== repeatPassword) {
       setError('Passwords do not match')
       setIsLoading(false)
@@ -45,10 +52,13 @@ export default function Page() {
           emailRedirectTo:
             process.env.NEXT_PUBLIC_SIGNUP_REDIRECT_URL ||
             `${window.location.origin}/auth/sign-up-success`,
+          // Store PKCE verifier in cookies (critical fix for SSR)
+          pkceCodeVerifier: window.localStorage.getItem('pkce_verifier'),
         },
       })
       if (error) throw error
-      router.push('/auth/sign-up-success')
+      // Remove manual redirect - let Supabase handle it via email link/OAuth flow
+      // router.push('/auth/sign-up-success')
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {
@@ -67,6 +77,9 @@ export default function Page() {
           redirectTo:
             process.env.NEXT_PUBLIC_SIGNUP_REDIRECT_URL ||
             `${window.location.origin}/auth/sign-up-success`,
+          // Enable PKCE flow explicitly and use cookie storage
+          pkceVerifierStorage: 'cookie',
+          skipBrowserRedirect: false,
         },
       })
       if (error) throw error
@@ -78,76 +91,92 @@ export default function Page() {
   }
 
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10 bg-gray-50">
       <div className="w-full max-w-sm">
-        <div className="flex flex-col gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Sign up</CardTitle>
-              <CardDescription>Create a new account to book appointments</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSignUp}>
-                <div className="grid gap-2">
-                  <div className="grid gap-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="repeat-password">Repeat Password</Label>
-                    <Input
-                      id="repeat-password"
-                      type="password"
-                      value={repeatPassword}
-                      onChange={(e) => setRepeatPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  {error && <p className="text-red-500 text-sm">{error}</p>}
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? 'Creating account...' : 'Sign up'}
-                  </Button>
-                  <div className="flex items-center gap-2 py-2">
-                    <div className="flex-1 h-px bg-gray-200"></div>
-                    <span className="text-sm text-gray-500">Or continue with</span>
-                    <div className="flex-1 h-px bg-gray-200"></div>
-                  </div>
-                  <Button
-                    type="button"
-                    onClick={handleGoogleSignUp}
-                    className="w-full bg-white border border-gray-300"
-                    disabled={isGoogleLoading}
-                  >
-                    <FcGoogle className="mr-2 h-5 w-5" />
-                    {isGoogleLoading ? 'Processing...' : 'Continue with Google'}
-                  </Button>
-                </div>
-                <div className="mt-4 text-center text-sm">
-                  Already have an account?{' '}
-                  <Link href="/auth/login" className="underline">
-                    Login here
-                  </Link>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="shadow-md">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-center">Sign up</CardTitle>
+            <CardDescription className="text-center">
+              Create a new account to book appointments
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSignUp} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="your@email.com"
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="••••••••"
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="repeat-password" className="text-sm font-medium">Repeat Password</Label>
+                <Input
+                  id="repeat-password"
+                  type="password"
+                  value={repeatPassword}
+                  onChange={(e) => setRepeatPassword(e.target.value)}
+                  required
+                  placeholder="••••••••"
+                  className="w-full"
+                />
+              </div>
+
+              {error && <p className="text-red-500 text-sm font-medium text-center">{error}</p>}
+
+              <Button 
+                type="submit" 
+                className="w-full bg-primary hover:bg-primary/90 text-white font-medium"
+                disabled={isLoading}
+              >
+                {isLoading ? 'Creating account...' : 'Sign up'}
+              </Button>
+
+              <div className="flex items-center gap-2 py-3">
+                <div className="flex-1 h-px bg-gray-200"></div>
+                <span className="text-sm text-gray-500 font-medium">Or continue with</span>
+                <div className="flex-1 h-px bg-gray-200"></div>
+              </div>
+
+              <Button
+                type="button"
+                onClick={handleGoogleSignUp}
+                className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-medium"
+                disabled={isGoogleLoading}
+              >
+                <FcGoogle className="mr-2 h-5 w-5" />
+                {isGoogleLoading ? 'Processing...' : 'Continue with Google'}
+              </Button>
+
+              <div className="mt-4 text-center text-sm text-gray-600">
+                Already have an account?{' '}
+                <Link 
+                  href="/auth/login" 
+                  className="underline text-primary font-medium hover:text-primary/80"
+                >
+                  Login here
+                </Link>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
