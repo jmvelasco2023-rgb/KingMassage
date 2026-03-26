@@ -1,164 +1,182 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import type { Booking } from '@/lib/types'
-import { createClient } from '@/lib/supabase/client'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+import { 
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { MoreHorizontal, ChevronDown, ChevronUp, Sparkles, MapPin, Phone } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
-import { MoreHorizontal, Check, X, MessageCircle } from 'lucide-react'
 import { ChatDialog } from '@/components/chat/chat-dialog'
+
+// Status style mapping
+const getStatusBadge = (status: string) => {
+  switch(status) {
+    case 'pending': return <Badge className="bg-amber-100 text-amber-800">Pending</Badge>
+    case 'approved': return <Badge className="bg-green-100 text-green-800">Approved</Badge>
+    case 'rejected': return <Badge className="bg-red-100 text-red-800">Rejected</Badge>
+    default: return <Badge>{status}</Badge>
+  }
+}
+
+// Get booking preferences summary
+const getPreferenceSummary = (booking: Booking) => {
+  const preferences = []
+  if (booking.pressure_preference) preferences.push(`Pressure: ${booking.pressure_preference.replace('-', ' ')}`)
+  if (booking.focus_area) preferences.push(`Focus: ${booking.focus_area.replace('-', ' ')}`)
+  if (booking.special_requests) preferences.push(`Notes: ${booking.special_requests}`)
+  return preferences.length > 0 ? preferences.join(' • ') : 'No special preferences'
+}
 
 interface BookingsTableProps {
   bookings: (Booking & { users: { email: string } })[]
 }
 
-const STATUS_STYLES = {
-  pending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-  approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-}
+export function BookingsTable({ bookings }: BookingsTableProps) {
+  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null)
 
-export function BookingsTable({ bookings: initialBookings }: BookingsTableProps) {
-  const router = useRouter()
-  const [bookings, setBookings] = useState(initialBookings)
-  const [updating, setUpdating] = useState<string | null>(null)
-  const [chatUserId, setChatUserId] = useState<string | null>(null)
-  const supabase = createClient()
-
-  const updateBookingStatus = async (bookingId: string, status: 'approved' | 'rejected') => {
-    setUpdating(bookingId)
-    try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status })
-        .eq('id', bookingId)
-
-      if (error) throw error
-
-      setBookings((prev) =>
-        prev.map((b) => (b.id === bookingId ? { ...b, status } : b))
-      )
-      router.refresh()
-    } catch (error) {
-      console.error('Failed to update booking:', error)
-    } finally {
-      setUpdating(null)
-    }
+  // Toggle expanded details view
+  const toggleExpand = (id: string) => {
+    setExpandedBookingId(expandedBookingId === id ? null : id)
   }
 
   return (
-    <>
-      <Card>
-        <CardHeader>
-          <CardTitle>All Bookings</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Service</TableHead>
-                  <TableHead>Date & Time</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-[80px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {bookings.map((booking) => (
-                  <TableRow key={booking.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{booking.name}</p>
-                        <p className="text-sm text-muted-foreground">{booking.mobile}</p>
+    <div className="space-y-4">
+      {bookings.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          No bookings found
+        </div>
+      ) : (
+        <div className="divide-y divide-muted-100">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Client</TableHead>
+                <TableHead>Service</TableHead>
+                <TableHead>Date & Time</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {bookings.map((booking) => (
+                <div key={booking.id} className="group">
+                  <TableRow className="cursor-pointer">
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                          {booking.email?.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p>{booking.users.email}</p>
+                          <p className="text-xs text-muted-foreground">{booking.name}</p>
+                        </div>
                       </div>
                     </TableCell>
-                    <TableCell>{booking.service}</TableCell>
                     <TableCell>
-                      <div>
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-muted-foreground" />
+                        {booking.service}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
                         <p>{format(parseISO(booking.date), 'MMM d, yyyy')}</p>
-                        <p className="text-sm text-muted-foreground">{booking.time}</p>
+                        <p className="text-xs text-muted-foreground">{booking.time} • {booking.duration + booking.extra_minutes} mins</p>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      {booking.duration + booking.extra_minutes} min
+                    <TableCell className="max-w-[200px] truncate">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-muted-foreground" />
+                        <span>{booking.location}</span>
+                      </div>
                     </TableCell>
-                    <TableCell className="max-w-[200px]">
-                      <p className="truncate">{booking.location}</p>
-                    </TableCell>
+                    <TableCell>{getStatusBadge(booking.status)}</TableCell>
                     <TableCell>
-                      <Badge className={STATUS_STYLES[booking.status]} variant="secondary">
-                        {booking.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            disabled={updating === booking.id}
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {booking.status === 'pending' && (
-                            <>
-                              <DropdownMenuItem 
-                                onClick={() => updateBookingStatus(booking.id, 'approved')}
-                              >
-                                <Check className="mr-2 h-4 w-4 text-green-600" />
-                                Approve
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => updateBookingStatus(booking.id, 'rejected')}
-                              >
-                                <X className="mr-2 h-4 w-4 text-red-600" />
-                                Reject
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                          <DropdownMenuItem onClick={() => setChatUserId(booking.user_id)}>
-                            <MessageCircle className="mr-2 h-4 w-4" />
-                            Message Client
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => toggleExpand(booking.id)}
+                        >
+                          {expandedBookingId === booking.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        Details
+                      </Button>
+                      {booking.status === 'pending' && (
+                        <Button 
+                          variant="default" 
+                          size="sm"
+                          className="bg-amber-500 hover:bg-amber-600"
+                          onClick={() => updateBookingStatus(booking.id, 'approved')}
+                        >
+                          Approve
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
 
-      <ChatDialog 
-        open={!!chatUserId} 
-        onOpenChange={(open) => !open && setChatUserId(null)} 
-        userId={chatUserId || ''}
-        isAdmin
-      />
-    </>
+                  {/* Expanded Details */}
+                  {expandedBookingId === booking.id && (
+                    <TableRow className="bg-muted/5">
+                      <TableCell colSpan={6} className="p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <div className="space-y-2">
+                            <h4 className="font-medium text-sm">Booking Details</h4>
+                            <div className="space-y-1 text-sm">
+                              <p><strong>Name:</strong> {booking.name}</p>
+                              <p><strong>Mobile:</strong> {booking.mobile}</p>
+                              <p><strong>Joined:</strong> {format(parseISO(booking.users?.created_at || ''), 'MMM d, yyyy')}</p>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <h4 className="font-medium text-sm">Session Preferences</h4>
+                            <p>{getPreferenceSummary(booking)}</p>
+                            {booking.special_requests && (
+                              <div className="mt-2">
+                                <p className="text-xs text-muted-foreground">Special Requests:</p>
+                                <p className="text-sm">{booking.special_requests}</p>
+                              </div>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            <h4 className="font-medium text-sm">Admin Actions</h4>
+                            <div className="flex gap-2">
+                              <Button 
+                                size="sm" 
+                                className="bg-green-500 hover:bg-green-600"
+                                onClick={() => updateBookingStatus(booking.id, 'approved')}
+                              >
+                                Approve
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                className="bg-red-500 hover:bg-red-600"
+                                onClick={() => updateBookingStatus(booking.id, 'rejected')}
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => setChatUserId(booking.user_id)}
+                            >
+                              <ChatDialog size={16} className="mr-2" /> Message Client
+                            </Button>
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </div>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
   )
 }
