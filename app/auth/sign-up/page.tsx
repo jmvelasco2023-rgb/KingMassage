@@ -42,7 +42,6 @@ export default function Page() {
         email,
         password,
         options: {
-          // Redirect to sign-up success page for email sign-ups
           emailRedirectTo:
             process.env.NEXT_PUBLIC_SIGNUP_REDIRECT_URL ||
             `${window.location.origin}/auth/sign-up-success`,
@@ -65,7 +64,6 @@ export default function Page() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          // Redirect to sign-up success page for Google sign-ups
           redirectTo:
             process.env.NEXT_PUBLIC_SIGNUP_REDIRECT_URL ||
             `${window.location.origin}/auth/sign-up-success`,
@@ -139,16 +137,16 @@ export default function Page() {
                     <FcGoogle className="mr-2 h-5 w-5" />
                     {isGoogleLoading ? 'Processing...' : 'Continue with Google'}
                   </Button>
-                  <div className="text-center text-sm">
-                    Already have an account?{' '}
-                    <Link href="/auth/login" className="underline">
-                      Login here
-                    </Link>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
+                </div>
+                <div className="mt-4 text-center text-sm">
+                  Already have an account?{' '}
+                  <Link href="/auth/login" className="underline">
+                    Login here
+                  </Link>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
