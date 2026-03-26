@@ -7,9 +7,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Empty } from '@/components/ui/empty'
 import { format, parseISO, startOfDay, isBefore, isSameDay } from 'date-fns'
-import { Calendar, Clock, MapPin, Sparkles, MessageCircle, CheckCircle, Clock3, XCircle, Loader2 } from 'lucide-react'
+import { Calendar, Clock, MapPin, Sparkles, MessageCircle, CheckCircle, Clock3, XCircle } from 'lucide-react'
 import { ChatDialog } from '@/components/chat/chat-dialog'
 import { CancelDialog } from './cancel-dialog' 
+import { RatingDialog } from './rating-dialog' // Import the new dialog
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -37,65 +38,53 @@ const STATUS_LABELS = {
 export function BookingsList({ bookings, userId }: BookingsListProps) {
   const [chatOpen, setChatOpen] = useState(false)
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false)
-  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null)
+  const [isRatingModalOpen, setIsRatingModalOpen] = useState(false)
+  const [selectedBooking, setSelectedBooking] = useState<{id: string, service: string} | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   
   const router = useRouter()
   const supabase = createClient()
 
   const handleOpenCancelModal = (id: string) => {
-    setSelectedBookingId(id)
+    setSelectedBooking({ id, service: '' })
     setIsCancelModalOpen(true)
   }
 
+  const handleOpenRatingModal = (id: string, service: string) => {
+    setSelectedBooking({ id, service })
+    setIsRatingModalOpen(true)
+  }
+
   const handleConfirmCancel = async () => {
-    if (!selectedBookingId) return
-    
+    if (!selectedBooking) return
     try {
       setIsSubmitting(true)
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: 'cancelled' })
-        .eq('id', selectedBookingId)
-
+      const { error } = await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', selectedBooking.id)
       if (error) throw error
-      
       setIsCancelModalOpen(false)
-      router.refresh() // This triggers a server-side data re-fetch
+      router.refresh()
     } catch (error: any) {
       alert('Error: ' + error.message)
     } finally {
       setIsSubmitting(false)
-      setSelectedBookingId(null)
+      setSelectedBooking(null)
     }
   }
 
-  // --- Logic Fix: Robust Date Separation ---
   const today = startOfDay(new Date())
 
   const upcomingBookings = bookings.filter(booking => {
     const bookingDate = startOfDay(parseISO(booking.date as string))
-    
-    // Status Check: Cancelled/Completed ALWAYS go to past
-    if (booking.status === 'cancelled' || booking.status === 'completed') return false
-    
-    // Date Check: If it's today OR in the future, it's Upcoming
-    const isToday = isSameDay(bookingDate, today)
-    const isFuture = !isBefore(bookingDate, today)
-    
-    return isToday || isFuture
+    const isFinalized = booking.status === 'cancelled' || booking.status === 'completed'
+    const isUpcomingDate = isSameDay(bookingDate, today) || !isBefore(bookingDate, today)
+    return isUpcomingDate && !isFinalized
   })
 
   const pastBookings = bookings.filter(booking => {
     const bookingDate = startOfDay(parseISO(booking.date as string))
-    
-    // Status Check: Finalized ones are always past/activity
     const isFinalized = booking.status === 'cancelled' || booking.status === 'completed'
-    
-    // Date Check: Truly before today
-    const isTrulyPast = isBefore(bookingDate, today) && !isSameDay(bookingDate, today)
-    
-    return isFinalized || isTrulyPast
+    const isActuallyPast = isBefore(bookingDate, today) && !isSameDay(bookingDate, today)
+    return isFinalized || isActuallyPast
   })
 
   if (bookings.length === 0) {
@@ -128,92 +117,114 @@ export function BookingsList({ bookings, userId }: BookingsListProps) {
               />
             ))
           ) : (
-            <div className="text-center py-8 border-2 border-dashed rounded-2xl text-muted-foreground">
-              No upcoming appointments.
+            <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed rounded-3xl bg-gray-50/50 text-muted-foreground">
+              <Calendar className="w-8 h-8 mb-2 opacity-20" />
+              <p className="font-medium">No upcoming appointments</p>
             </div>
           )}
         </div>
       </section>
 
-      {/* Past & Activity Section */}
-      <section>
-        <div className="flex items-center gap-2 mb-6 opacity-60">
-          <div className="bg-gray-100 p-2 rounded-full">
-            <CheckCircle className="w-5 h-5 text-gray-600" />
+      {/* Past Section */}
+      {pastBookings.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-6 opacity-60">
+            <div className="bg-gray-100 p-2 rounded-full">
+              <CheckCircle className="w-5 h-5 text-gray-600" />
+            </div>
+            <h2 className="text-xl font-bold tracking-tight">Past & Activity</h2>
           </div>
-          <h2 className="text-xl font-bold tracking-tight">Past & Activity</h2>
-        </div>
-        <div className="space-y-4">
-          {pastBookings.map((booking) => (
-            <BookingCard 
-              key={booking.id} 
-              booking={booking} 
-              onChatOpen={() => setChatOpen(true)} 
-              isPast 
-            />
-          ))}
-        </div>
-      </section>
+          <div className="space-y-4">
+            {pastBookings.map((booking) => (
+              <BookingCard 
+                key={booking.id} 
+                booking={booking} 
+                onChatOpen={() => setChatOpen(true)} 
+                onRate={() => handleOpenRatingModal(booking.id, booking.service)}
+                isPast 
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       <ChatDialog open={chatOpen} onOpenChange={setChatOpen} userId={userId} />
-      
       <CancelDialog 
-        isOpen={isCancelModalOpen}
-        onClose={() => setIsCancelModalOpen(false)}
-        onConfirm={handleConfirmCancel}
-        isLoading={isSubmitting}
+        isOpen={isCancelModalOpen} 
+        onClose={() => setIsCancelModalOpen(false)} 
+        onConfirm={handleConfirmCancel} 
+        isLoading={isSubmitting} 
       />
+      {selectedBooking && (
+        <RatingDialog
+          isOpen={isRatingModalOpen}
+          onClose={() => setIsRatingModalOpen(false)}
+          bookingId={selectedBooking.id}
+          serviceName={selectedBooking.service}
+        />
+      )}
     </div>
   )
 }
 
-function BookingCard({ booking, onChatOpen, onCancel, isPast = false }: any) {
+function BookingCard({ booking, onChatOpen, onCancel, onRate, isPast = false }: any) {
   const canCancel = !isPast && (booking.status === 'pending' || booking.status === 'approved')
+  const canRate = booking.status === 'completed'
 
   return (
-    <Card className={`overflow-hidden transition-all duration-300 border-none rounded-2xl ${
-      isPast ? 'bg-gray-50/50 opacity-80' : 'bg-white shadow-md ring-1 ring-black/5'
+    <Card className={`overflow-hidden transition-all duration-300 border-none rounded-[2rem] ${
+      isPast ? 'bg-gray-50/50 opacity-80' : 'bg-white shadow-lg shadow-black/5 ring-1 ring-black/5'
     }`}>
       {!isPast && <div className="h-1.5 bg-green-500 w-full" />}
-      <CardContent className="p-5">
+      <CardContent className="p-6">
         <div className="flex flex-col gap-4">
           <div className="flex justify-between items-start">
-            <div className="flex items-center gap-2">
-              <div className={`p-2 rounded-xl ${isPast ? 'bg-gray-100' : 'bg-green-50'}`}>
-                <Sparkles className={`w-4 h-4 ${isPast ? 'text-gray-400' : 'text-green-600'}`} />
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-2xl ${isPast ? 'bg-gray-100' : 'bg-green-50'}`}>
+                <Sparkles className={`w-5 h-5 ${isPast ? 'text-gray-400' : 'text-green-600'}`} />
               </div>
-              <span className="font-bold text-lg">{booking.service}</span>
+              <div>
+                <span className="font-bold text-lg block leading-tight">{booking.service}</span>
+                <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground font-medium">
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span className="truncate max-w-[120px]">{booking.location}</span>
+                </div>
+              </div>
             </div>
             <Badge className={`${STATUS_STYLES[booking.status as keyof typeof STATUS_STYLES]} border-none px-3 py-1 rounded-full text-[10px] uppercase tracking-wider font-bold`}>
               {STATUS_LABELS[booking.status as keyof typeof STATUS_LABELS]}
             </Badge>
           </div>
           
-          <div className="grid grid-cols-2 gap-3 py-2 border-y border-gray-100">
-            <div className="flex items-center gap-2 text-sm font-medium">
+          <div className={`grid grid-cols-2 gap-3 p-3 rounded-2xl ${isPast ? 'bg-gray-200/20' : 'bg-gray-50'}`}>
+            <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
               <Calendar className="w-4 h-4 text-gray-400" />
               {format(parseISO(booking.date), 'MMM dd, yyyy')}
             </div>
-            <div className="flex items-center gap-2 text-sm font-medium">
+            <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
               <Clock className="w-4 h-4 text-gray-400" />
               {booking.time}
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <MapPin className="w-3.5 h-3.5" />
-            <span className="truncate">{booking.location}</span>
-          </div>
-
           <div className="flex gap-2 mt-2">
-            <Button variant="secondary" className="flex-1 rounded-xl font-semibold" onClick={onChatOpen}>
+            <Button variant="secondary" className="flex-1 rounded-2xl font-bold bg-gray-100 hover:bg-gray-200 h-11" onClick={onChatOpen}>
               <MessageCircle className="w-4 h-4 mr-2" /> Chat
             </Button>
+
+            {canRate && (
+              <Button 
+                className="flex-1 rounded-2xl font-bold bg-amber-400 hover:bg-amber-500 text-amber-950 h-11 shadow-sm"
+                onClick={onRate}
+              >
+                <Star className="w-4 h-4 mr-2 fill-amber-950" /> Rate
+              </Button>
+            )}
 
             {canCancel && (
               <Button 
                 variant="ghost" 
-                className="flex-1 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl font-semibold"
+                className="flex-1 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-2xl font-bold h-11"
                 onClick={onCancel}
               >
                 <XCircle className="w-4 h-4 mr-2" /> Cancel
