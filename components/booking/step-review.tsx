@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 import { format } from 'date-fns'
-import { Sparkles, CalendarDays, Clock, User, Phone, MapPin, Check, MessageSquare } from 'lucide-react'
+import { Sparkles, CalendarDays, Clock, User, Phone, MapPin, Check, MessageSquare, Flame, Droplets, Wind, Lungs } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 // Helper to map values to friendly labels
@@ -46,6 +46,17 @@ const getFriendlyLabel = (type: string, value: string) => {
   }
 }
 
+// Get service-specific icon
+const getServiceIcon = (service: string | undefined) => {
+  switch(service) {
+    case 'Ear Candling': return <Lungs className="w-5 h-5 text-primary mt-0.5" />
+    case 'Hot Stone': return <Droplets className="w-5 h-5 text-primary mt-0.5" />
+    case 'Ventusa': return <Wind className="w-5 h-5 text-primary mt-0.5" />
+    case 'Fire Massage': return <Flame className="w-5 h-5 text-primary mt-0.5" />
+    default: return <Sparkles className="w-5 h-5 text-primary mt-0.5" />
+  }
+}
+
 export function StepReview() {
   const router = useRouter()
   const { formData, prevStep, resetForm } = useBookingStore()
@@ -68,7 +79,7 @@ export function StepReview() {
         return
       }
 
-      // UPDATED: Added special request fields to database insertion
+      // Updated with all service types supported
       const { error: bookingError } = await supabase.from('bookings').insert({
         user_id: user.id,
         name: formData.name,
@@ -79,7 +90,6 @@ export function StepReview() {
         time: formData.time,
         duration: formData.duration,
         extra_minutes: formData.extraMinutes,
-        // NEW FIELDS HERE
         pressure_preference: formData.pressurePreference as PressurePreference,
         focus_area: formData.focusArea as FocusArea,
         additional_needs: formData.additionalNeeds as AdditionalNeeds,
@@ -109,9 +119,9 @@ export function StepReview() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y">
-            {/* Existing sections remain unchanged */}
+            {/* Treatment Section with Service-Specific Icon */}
             <div className="flex items-start gap-4 p-4">
-              <Sparkles className="w-5 h-5 text-primary mt-0.5" />
+              {getServiceIcon(formData.service)}
               <div>
                 <p className="text-sm text-muted-foreground">Treatment</p>
                 <p className="font-medium">{service?.label}</p>
@@ -170,7 +180,7 @@ export function StepReview() {
               </div>
             </div>
 
-            {/* NEW: Special Requests Section */}
+            {/* Special Requests Section */}
             <Separator />
             <div className="flex items-start gap-4 p-4">
               <MessageSquare className="w-5 h-5 text-primary mt-0.5" />
@@ -195,9 +205,9 @@ export function StepReview() {
                 </div>
 
                 {formData.specialRequests && (
-                  <div className="mt-2">
-                    <p className="text-xs text-muted-foreground">Additional Details</p>
-                    <p className="font-medium text-sm">{formData.specialRequests}</p>
+                  <div className="mt-2 p-3 bg-muted/50 rounded-md">
+                    <p className="text-xs text-muted-foreground font-medium">Additional Details</p>
+                    <p className="text-sm">{formData.specialRequests}</p>
                   </div>
                 )}
               </div>
@@ -230,7 +240,7 @@ export function StepReview() {
         >
           {isSubmitting ? (
             <>
-              <Spinner className="mr-2" />
+              <Spinner className="mr-2 h-4 w-4" />
               Submitting...
             </>
           ) : (
