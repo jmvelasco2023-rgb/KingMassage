@@ -3,14 +3,48 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useBookingStore } from '@/lib/booking-store'
-import { SERVICES } from '@/lib/types'
+import { SERVICES, type PressurePreference, type FocusArea, type AdditionalNeeds } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 import { format } from 'date-fns'
-import { Sparkles, CalendarDays, Clock, User, Phone, MapPin, Check } from 'lucide-react'
+import { Sparkles, CalendarDays, Clock, User, Phone, MapPin, Check, MessageSquare } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+
+// Helper to map values to friendly labels
+const getFriendlyLabel = (type: string, value: string) => {
+  const mappings = {
+    pressure: {
+      'no-preference': 'No Preference',
+      'light': 'Light',
+      'medium': 'Medium',
+      'firm': 'Firm/Deep'
+    },
+    focus: {
+      'full-body': 'Full Body (Even Distribution)',
+      'back-shoulders': 'Back & Shoulders',
+      'legs-feet': 'Legs & Feet',
+      'neck-upper-back': 'Neck & Upper Back',
+      'other': 'Other'
+    },
+    needs: {
+      'none': 'No Special Needs',
+      'oil-allergy': 'Oil Allergy',
+      'table-assistance': 'Needs Table Setup Help',
+      'quiet-session': 'Quiet Session (No Conversation)',
+      'aromatherapy': 'Aromatherapy Preferred',
+      'other': 'Other'
+    }
+  }
+
+  switch(type) {
+    case 'pressure': return mappings.pressure[value as keyof typeof mappings.pressure]
+    case 'focus': return mappings.focus[value as keyof typeof mappings.focus]
+    case 'needs': return mappings.needs[value as keyof typeof mappings.needs]
+    default: return value
+  }
+}
 
 export function StepReview() {
   const router = useRouter()
@@ -34,6 +68,7 @@ export function StepReview() {
         return
       }
 
+      // UPDATED: Added special request fields to database insertion
       const { error: bookingError } = await supabase.from('bookings').insert({
         user_id: user.id,
         name: formData.name,
@@ -44,6 +79,11 @@ export function StepReview() {
         time: formData.time,
         duration: formData.duration,
         extra_minutes: formData.extraMinutes,
+        // NEW FIELDS HERE
+        pressure_preference: formData.pressurePreference as PressurePreference,
+        focus_area: formData.focusArea as FocusArea,
+        additional_needs: formData.additionalNeeds as AdditionalNeeds,
+        special_requests: formData.specialRequests,
         status: 'pending',
       })
 
@@ -69,6 +109,7 @@ export function StepReview() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y">
+            {/* Existing sections remain unchanged */}
             <div className="flex items-start gap-4 p-4">
               <Sparkles className="w-5 h-5 text-primary mt-0.5" />
               <div>
@@ -126,6 +167,39 @@ export function StepReview() {
               <div>
                 <p className="text-sm text-muted-foreground">Location</p>
                 <p className="font-medium">{formData.location}</p>
+              </div>
+            </div>
+
+            {/* NEW: Special Requests Section */}
+            <Separator />
+            <div className="flex items-start gap-4 p-4">
+              <MessageSquare className="w-5 h-5 text-primary mt-0.5" />
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Session Preferences</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Pressure Preference</p>
+                    <p className="font-medium">{getFriendlyLabel('pressure', formData.pressurePreference || 'no-preference')}</p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-xs text-muted-foreground">Focus Area</p>
+                    <p className="font-medium">{getFriendlyLabel('focus', formData.focusArea || 'full-body')}</p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-xs text-muted-foreground">Additional Needs</p>
+                    <p className="font-medium">{getFriendlyLabel('needs', formData.additionalNeeds || 'none')}</p>
+                  </div>
+                </div>
+
+                {formData.specialRequests && (
+                  <div className="mt-2">
+                    <p className="text-xs text-muted-foreground">Additional Details</p>
+                    <p className="font-medium text-sm">{formData.specialRequests}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
