@@ -31,14 +31,14 @@ export function StepReview() {
   }
   
   const basePrice = BASE_SERVICE_PRICES[formData.service as keyof typeof BASE_SERVICE_PRICES] || 0
-  const extraTimePrice = formData.extraMinutes === 15 ? 100 : formData.extraMinutes === 30 ? 200 : 0
+  const extraTimePrice = formData.extraMinutes === 15 ? 150 : formData.extraMinutes === 30 ? 250 : formData.extraMinutes === 45 ? 350 : 0
   
   // Logic to determine add-on price based on your dropdown selection
   const getAddOnPrice = () => {
     switch (formData.addOnService) {
-      case 'Ventusa': return 200;
+      case 'Ventusa': return 150;
       case 'Ear Candling': return 150;
-      case 'Foot Scrub': return 250;
+      case 'Foot Scrub': return 150;
       default: return 0;
     }
   }
