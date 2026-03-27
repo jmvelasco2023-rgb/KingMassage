@@ -75,12 +75,29 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
     router.refresh()
   }
 
-  async function handleComplete(id: string, earnings: number) {
+  // ✅ UPDATED: Save add_ons, duration, total_price, and earnings
+  async function handleComplete(id: string, earnings: number, bookingData?: any) {
+    const bookingToUpdate = localBookings.find(b => b.id === id)
+    
     setLocalBookings(prev =>
-      prev.map(b => b.id === id ? { ...b, status: 'completed', earnings } : b)
+      prev.map(b => b.id === id ? { 
+        ...b, 
+        status: 'completed', 
+        earnings,
+        add_ons: bookingData?.add_ons || b.add_ons,
+        duration: bookingData?.duration || b.duration,
+        total_price: bookingData?.total_price || b.total_price
+      } : b)
     )
+    
     try {
-      await supabase.from('bookings').update({ status: 'completed', earnings }).eq('id', id)
+      await supabase.from('bookings').update({ 
+        status: 'completed', 
+        earnings,
+        add_ons: bookingData?.add_ons || bookingToUpdate?.add_ons,
+        duration: bookingData?.duration || bookingToUpdate?.duration,
+        total_price: bookingData?.total_price || bookingToUpdate?.total_price
+      }).eq('id', id)
     } catch (err) {
       console.error('Complete failed:', err)
     }
