@@ -7,11 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Calendar, User, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 import { useState } from 'react' 
 import { useRouter } from 'next/navigation'
+import { format } from 'date-fns' // Added for proper date formatting
 
 export function StepReview() {
   const router = useRouter()
-  const { formData, resetForm } = useBookingStore()
-  const { calculateTotalDuration } = useBookingStore()
+  const { formData, resetForm, calculateTotalDuration } = useBookingStore()
   const totalDuration = calculateTotalDuration()
 
   const supabase = createClient()
@@ -71,7 +71,8 @@ export function StepReview() {
           extra_minutes: formData.extraMinutes,
           add_ons: addOnsData, 
           total_price: totalPrice,
-          date: formData.date,
+          // CRITICAL FIX: Format the date to 'yyyy-MM-dd' to ignore timezone offsets
+          date: format(new Date(formData.date), 'yyyy-MM-dd'),
           time: formData.time,
           pressure_preference: formData.pressurePreference,
           focus_area: formData.focusArea,
@@ -99,7 +100,7 @@ export function StepReview() {
   const handleClose = () => {
     setShowModal(false)
     if (isSuccess) {
-      router.push('/bookings') // Navigates to user history after success
+      router.push('/my-bookings') // Navigates to user history after success
     }
   }
 
@@ -145,9 +146,8 @@ export function StepReview() {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Date:</span>
-            <span>{formData.date ? new Date(formData.date).toLocaleDateString('en-PH', {
-              year: 'numeric', month: 'long', day: 'numeric'
-            }) : ''}</span>
+            {/* Display Fix: Use date-fns format for consistent local display */}
+            <span>{formData.date ? format(new Date(formData.date), 'MMMM dd, yyyy') : ''}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Time:</span>
