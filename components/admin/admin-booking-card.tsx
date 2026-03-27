@@ -1,18 +1,20 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { Booking } from '@/lib/types'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { User, Info, Clock, PlusCircle } from 'lucide-react'
+import { calculateTotalPrice } from '@/lib/pricing'
 
 const ADD_ON_OPTIONS = [
   { name: 'Ear Candling', price: 150 },
-  { name: 'Hot Stones', price: 200 },
-  { name: 'Aromatherapy', price: 250 }
+  { name: 'Ventusa', price: 150 },
+  { name: 'Hot Stone', price: 150 },
+  { name: 'Fire Massage', price: 150 }
 ]
 
-const EXTEND_OPTIONS = [15, 30, 60]
+const EXTEND_OPTIONS = [15, 30, 45]
 
 interface AdminBookingCardProps {
   booking: Booking
@@ -25,22 +27,32 @@ export function AdminBookingCard({ booking, onApprove, onReject, onComplete }: A
   const status = booking.status?.toLowerCase()
   const [localBooking, setLocalBooking] = useState({
     ...booking,
-    add_ons: booking.add_ons || []
+    add_ons: booking.add_ons || [],
+    extra_minutes: 0
   })
+
+  // ✅ Auto-calculate total price whenever extra_minutes or add_ons change
+  const calculatedTotal = useMemo(() => {
+    return calculateTotalPrice(
+      booking.total_price || 600,
+      localBooking.extra_minutes,
+      localBooking.add_ons.length
+    )
+  }, [localBooking.extra_minutes, localBooking.add_ons, booking.total_price])
 
   const handleExtendTime = (minutes: number) => {
     setLocalBooking(prev => ({
       ...prev,
-      duration: prev.duration + minutes,
-      total_price: prev.total_price + (minutes * 10) // adjust rate per minute
+      extra_minutes: prev.extra_minutes + minutes,
+      total_price: calculatedTotal // Will be recalculated by useMemo
     }))
   }
 
   const handleAddService = (service: { name: string, price: number }) => {
     setLocalBooking(prev => ({
       ...prev,
-      add_ons: [...prev.add_ons, service],
-      total_price: prev.total_price + service.price
+      add_ons: [...prev.add_ons, service]
+      // total_price will auto-update via useMemo
     }))
   }
 
@@ -54,7 +66,7 @@ export function AdminBookingCard({ booking, onApprove, onReject, onComplete }: A
           </div>
           <div className="min-w-0 flex-1">
             <h3 className="font-bold text-slate-900 text-lg leading-tight">
-              {localBooking.service} ({localBooking.duration}m)
+              {localBooking.service} ({localBooking.duration + localBooking.extra_minutes}m)
             </h3>
             <p className="text-[11px] text-slate-400 font-bold uppercase tracking-tight">
               {localBooking.name} • {localBooking.date}
@@ -81,7 +93,7 @@ export function AdminBookingCard({ booking, onApprove, onReject, onComplete }: A
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge className="bg-slate-50 text-slate-700 rounded-full px-3 py-1 text-xs font-bold shadow-sm">
-              {localBooking.service} ({localBooking.duration}m)
+              {localBooking.service} ({localBooking.duration + localBooking.extra_minutes}m)
             </Badge>
             {localBooking.add_ons.map((ao, i) => (
               <Badge key={i} className="bg-emerald-50 text-emerald-700 rounded-full px-3 py-1 text-xs font-bold shadow-sm">
@@ -104,11 +116,12 @@ export function AdminBookingCard({ booking, onApprove, onReject, onComplete }: A
                   onChange={(e) => {
                     const val = parseInt(e.target.value)
                     if (val) handleExtendTime(val)
+                    e.target.value = '' // Reset dropdown
                   }}
                 >
                   <option value="">Extend Time</option>
                   {EXTEND_OPTIONS.map(opt => (
-                    <option key={opt} value={opt}>+{opt}m</option>
+                    <option key={opt} value={opt}>+{opt}m (₱{opt === 15 ? 150 : opt === 30 ? 250 : 350})</option>
                   ))}
                 </select>
               </div>
@@ -121,6 +134,7 @@ export function AdminBookingCard({ booking, onApprove, onReject, onComplete }: A
                   onChange={(e) => {
                     const service = ADD_ON_OPTIONS.find(s => s.name === e.target.value)
                     if (service) handleAddService(service)
+                    e.target.value = '' // Reset dropdown
                   }}
                 >
                   <option value="">Add Service</option>
@@ -130,13 +144,33 @@ export function AdminBookingCard({ booking, onApprove, onReject, onComplete }: A
                 </select>
               </div>
             </div>
+
+            {/* Price Breakdown */}
+            <div className="bg-white rounded-xl p-3 text-xs space-y-1 border border-slate-100">
+              <div className="flex justify-between text-slate-600">
+                <span>Base ({localBooking.duration}min):</span>
+                <span className="font-bold">₱{booking.total_price || 600}</span>
+              </div>
+              {localBooking.extra_minutes > 0 && (
+                <div className="flex justify-between text-emerald-600">
+                  <span>Extra Time (+{localBooking.extra_minutes}min):</span>
+                  <span className="font-bold">₱{calculateTotalPrice(booking.total_price || 600, localBooking.extra_minutes, 0) - (booking.total_price || 600)}</span>
+                </div>
+              )}
+              {localBooking.add_ons.length > 0 && (
+                <div className="flex justify-between text-emerald-600">
+                  <span>Add-ons ({localBooking.add_ons.length}):</span>
+                  <span className="font-bold">₱{localBooking.add_ons.length * 150}</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* Footer */}
         <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-          <span className="text-[10px] font-bold text-slate-400 uppercase">Earnings</span>
-          <span className="text-xl font-black text-slate-900">₱{localBooking.total_price}</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase">Total Earnings</span>
+          <span className="text-2xl font-black text-emerald-600">₱{calculatedTotal}</span>
         </div>
 
         {/* Action buttons */}
@@ -162,7 +196,7 @@ export function AdminBookingCard({ booking, onApprove, onReject, onComplete }: A
               onClick={() => onComplete(localBooking.id)}
               className="bg-emerald-600 text-white rounded-2xl h-12 px-10 font-bold text-xs shadow-md active:scale-95 transition-transform"
             >
-              Finish Session
+              Finish Session (₱{calculatedTotal})
             </button>
           )}
         </div>
