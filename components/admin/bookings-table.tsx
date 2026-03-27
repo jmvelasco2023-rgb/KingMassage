@@ -15,16 +15,16 @@ import { cn } from '@/lib/utils'
 
 const ADD_ON_OPTIONS = [
   { name: 'Ear Candling', price: 150, duration: 15 },
-  { name: 'Ventusa', price: 200, duration: 15 },
-  { name: 'Hot Stone', price: 200, duration: 15 },
-  { name: 'Fire Massage', price: 200, duration: 15 }
+  { name: 'Ventusa', price: 150, duration: 15 },
+  { name: 'Hot Stone', price: 150, duration: 15 },
+  { name: 'Fire Massage', price: 150, duration: 15 }
 ]
 
 interface BookingsTableProps {
   bookings: any[]
   onApprove: (id: string) => void
   onReject: (id: string) => void
-  onComplete: (id: string) => void
+  onComplete: (id: string, finalEarnings: number) => void // Updated to accept final price
 }
 
 export function BookingsTable({ bookings, onApprove, onReject, onComplete }: BookingsTableProps) {
@@ -33,10 +33,10 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [earningsInputs, setEarningsInputs] = useState<Record<string, number>>({})
 
+  // Initialize inputs with the current total price or existing earnings
   useEffect(() => {
     const initialInputs: Record<string, number> = {}
     bookings.forEach(b => { 
-      // Use total_price as the baseline for the editable input
       initialInputs[b.id] = b.earnings || b.total_price || 0 
     })
     setEarningsInputs(initialInputs)
@@ -57,10 +57,15 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
     const { error } = await supabase.from('bookings').update({ 
       add_ons: updatedAddOns, 
       total_price: newTotal, 
-      duration: newDuration
+      duration: newDuration,
+      earnings: newTotal // Keep earnings synced during add-on phase
     }).eq('id', booking.id)
 
-    if (!error) router.refresh()
+    if (!error) {
+      // Update local input state so it doesn't "jump" back to old value
+      setEarningsInputs(prev => ({ ...prev, [booking.id]: newTotal }))
+      router.refresh()
+    }
     setUpdatingId(null)
   }
 
@@ -76,17 +81,22 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
     const { error } = await supabase.from('bookings').update({
       add_ons: currentAddOns,
       total_price: newTotal,
-      duration: newDuration
+      duration: newDuration,
+      earnings: newTotal
     }).eq('id', booking.id)
 
-    if (!error) router.refresh()
+    if (!error) {
+      setEarningsInputs(prev => ({ ...prev, [booking.id]: newTotal }))
+      router.refresh()
+    }
     setUpdatingId(null)
   }
 
   return (
     <div className="flex flex-col gap-6 pb-24">
       {bookings.map(booking => {
-        const status = booking.status?.toLowerCase()
+        // Safe status check for button visibility
+        const status = booking.status?.toLowerCase() || 'pending'
         
         return (
           <Card key={booking.id} className="overflow-hidden border-none shadow-xl ring-1 ring-slate-100 rounded-[2rem]">
@@ -134,7 +144,7 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Services & Add-ons</span>
                 </div>
                 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 min-h-[32px]">
                   {(!booking.add_ons || booking.add_ons.length === 0) ? (
                     <span className="text-xs font-bold text-slate-300 italic px-1">Standard Session</span>
                   ) : (
@@ -144,7 +154,7 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                         {status !== 'completed' && (
                           <button 
                             onClick={() => removeAddOn(booking, i)}
-                            className="bg-emerald-100 hover:bg-emerald-200 rounded-full p-0.5"
+                            className="bg-emerald-100 hover:bg-emerald-200 rounded-full p-0.5 transition-colors"
                           >
                             <X className="h-3 w-3" />
                           </button>
@@ -155,7 +165,7 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                 </div>
                 
                 {status === 'approved' && (
-                  <div className="flex flex-wrap gap-2 pt-2">
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-50">
                     {ADD_ON_OPTIONS.map(opt => (
                       <button 
                         key={opt.name} 
@@ -185,7 +195,6 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                   </div>
                 </div>
 
-                {/* Status-Based Buttons */}
                 <div className="flex-1 flex gap-3">
                   {status === 'pending' && (
                     <>
@@ -208,7 +217,7 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                   {status === 'approved' && (
                     <Button 
                       className="w-full h-14 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-[1.25rem] shadow-lg"
-                      onClick={() => onComplete(booking.id)}
+                      onClick={() => onComplete(booking.id, earningsInputs[booking.id])}
                       disabled={updatingId === booking.id}
                     >
                       {updatingId === booking.id ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Finish Session'}
