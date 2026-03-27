@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react' // ✅ Fixed: Added React import to resolve "React is not defined"
 import { cn } from '@/lib/utils'
 import { Check } from 'lucide-react'
 
@@ -10,16 +11,16 @@ interface StepIndicatorProps {
 
 export function StepIndicator({ currentStep, steps }: StepIndicatorProps) {
   return (
-    // Added px-2 to prevent edges from hitting the screen and reduced mb-6 for tighter vertical space
     <div className="flex items-center justify-between w-full max-w-lg mx-auto mb-6 px-2">
       {steps.map((step, index) => (
+        // Using React.Fragment requires the 'React' import above
         <React.Fragment key={step.number}>
           <div className="flex flex-col items-center z-10">
             <div
               className={cn(
                 'w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-xs md:text-sm font-bold transition-all duration-500',
                 currentStep > step.number
-                  ? 'bg-emerald-600 text-white' // Matches your King's Massage branding
+                  ? 'bg-emerald-600 text-white' 
                   : currentStep === step.number
                   ? 'bg-emerald-600 text-white ring-4 ring-emerald-100'
                   : 'bg-slate-100 text-slate-400'
