@@ -20,10 +20,10 @@ export function StepPreferences() {
   // Function to map add-on names to their specific prices
   const handleAddOnLine = (value: string) => {
     let price = 0;
-    if (value === 'Ventusa') price = 150;
-    if (value === 'Ear Candling') price = 150;
-    if (value === 'Fire Massage') price = 150;
-    if (value === 'Hot Stone') price = 150;
+    if (value === 'Ventusa +150') price = 150;
+    if (value === 'Ear Candling +150') price = 150;
+    if (value === 'Fire Massage +150') price = 150;
+    if (value === 'Hot Stone +150') price = 150;
     
     updateFormData({ 
       addOnService: value,
