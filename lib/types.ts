@@ -1,4 +1,6 @@
-// --- Updated types.ts ---
+'use client'
+
+// --- Service & Add-On Types ---
 
 export type ServiceType = 
   | 'Swedish' 
@@ -11,15 +13,17 @@ export type AddOnType =
   | 'Hot Stone'
   | 'Ventusa'
   | 'Fire Massage'
+  | 'Foot Scrub' // Added to match previous UI requests
   | 'None'
 
-// ✅ ADDED 'cancelled' to the status type
+// ✅ Booking Statuses (Includes Cancelled)
 export type BookingStatus = 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled'
 export type UserRole = 'admin' | 'client'
 
-export type PressurePreference = 'no-preference' | 'light' | 'medium' | 'firm'
-export type FocusArea = 'full-body' | 'back-shoulders' | 'legs-feet' | 'neck-upper-back' | 'other'
-export type AdditionalNeeds = 'none' | 'oil-allergy' | 'table-assistance' | 'quiet-session' | 'aromatherapy' | 'other'
+// --- Preference Specific Types ---
+export type PressurePreference = 'no-preference' | 'soft' | 'medium' | 'hard'
+export type FocusArea = 'full-body' | 'upper-body' | 'lower-body' | 'other'
+export type AdditionalNeeds = 'none' | 'oil-allergy' | 'injuries' | 'quiet-session' | 'other'
 
 export interface AddOn {
   name: AddOnType
@@ -34,15 +38,15 @@ export interface User {
   created_at: string
 }
 
-// ✅ UPDATED Booking Interface
+// --- Booking Interface (Database Schema) ---
 export interface Booking {
   id: string
-  user_id: string // ✅ Added user_id so TypeScript recognizes it for filtering
+  user_id: string 
   name: string
   mobile: string
   location: string
   service: ServiceType
-  date: string // ✅ Usually a string from Supabase; converted to Date via parseISO in UI
+  date: string 
   time: string
   duration: number
   extra_minutes: number
@@ -57,6 +61,7 @@ export interface Booking {
   created_at: string
 }
 
+// --- Form State Interface (Zustand) ---
 export interface BookingFormData {
   name: string
   mobile: string
@@ -79,7 +84,7 @@ export interface TimeSlot {
   available: boolean
 }
 
-// --- Constants (Stay the same) ---
+// --- Constants ---
 
 export const SERVICES: { value: ServiceType; label: string; description: string; price: number }[] = [
   { value: 'Swedish', label: 'Swedish Massage', description: 'Gentle, relaxing strokes for stress relief', price: 600 },
@@ -90,16 +95,18 @@ export const SERVICES: { value: ServiceType; label: string; description: string;
 
 export const ADD_ONS: { value: AddOnType; label: string; description: string; price: number; duration: number }[] = [
   { value: 'None', label: 'No Add-On', description: 'No additional service', price: 0, duration: 0 },
-  { value: 'Ear Candling', label: 'Ear Candling', description: 'Holistic ear cleansing therapy', price: 300, duration: 15 },
+  { value: 'Ear Candling', label: 'Ear Candling', description: 'Holistic ear cleansing therapy', price: 150, duration: 15 },
   { value: 'Hot Stone', label: 'Hot Stone Massage', description: 'Heated stones for deep muscle relief', price: 350, duration: 15 },
-  { value: 'Ventusa', label: 'Ventusa Therapy', description: 'Cupping-based massage technique', price: 320, duration: 15 },
-  { value: 'Fire Massage', label: 'Fire Massage', description: 'Warm herbal compresses with gentle heat', price: 400, duration: 15 }
+  { value: 'Ventusa', label: 'Ventusa Therapy', description: 'Cupping-based massage technique', price: 200, duration: 15 },
+  { value: 'Fire Massage', label: 'Fire Massage', description: 'Warm herbal compresses with gentle heat', price: 400, duration: 15 },
+  { value: 'Foot Scrub', label: 'Foot Scrub', description: 'Exfoliating treatment for feet', price: 250, duration: 15 }
 ]
 
 export const DURATIONS = [
   { value: 60, label: '60 minutes' },
   { value: 90, label: '90 minutes' },
-  { value: 120, label: '120 minutes' }
+  { value: 120, label: '120 minutes' },
+  { value: 150, label: '150 minutes' }
 ]
 
 export const EXTRA_MINUTES = [
