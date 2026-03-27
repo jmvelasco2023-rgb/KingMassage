@@ -75,7 +75,7 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
     router.refresh()
   }
 
-  // ✅ UPDATED: Save add_ons, duration, total_price, and earnings
+  // ✅ FIXED: Save to extra_minutes field instead of duration
   async function handleComplete(id: string, earnings: number, bookingData?: any) {
     const bookingToUpdate = localBookings.find(b => b.id === id)
     
@@ -84,24 +84,26 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
         ...b, 
         status: 'completed', 
         earnings,
-        add_ons: bookingData?.add_ons || b.add_ons,
-        duration: bookingData?.duration || b.duration,
+        add_ons: bookingData?.add_ons || b.add_ons || [],
+        extra_minutes: bookingData?.extra_minutes || 0,
         total_price: bookingData?.total_price || b.total_price
       } : b)
     )
     
     try {
+      // ✅ Key fix: Save to extra_minutes, NOT duration
       await supabase.from('bookings').update({ 
         status: 'completed', 
         earnings,
-        add_ons: bookingData?.add_ons || bookingToUpdate?.add_ons,
-        duration: bookingData?.duration || bookingToUpdate?.duration,
+        add_ons: bookingData?.add_ons || bookingToUpdate?.add_ons || [],
+        extra_minutes: bookingData?.extra_minutes || 0, // ✅ Save to extra_minutes
         total_price: bookingData?.total_price || bookingToUpdate?.total_price
       }).eq('id', id)
+      
+      router.refresh()
     } catch (err) {
       console.error('Complete failed:', err)
     }
-    router.refresh()
   }
 
   // Stats
