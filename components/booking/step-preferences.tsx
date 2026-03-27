@@ -20,9 +20,10 @@ export function StepPreferences() {
   // Function to map add-on names to their specific prices
   const handleAddOnLine = (value: string) => {
     let price = 0;
-    if (value === 'Ventusa') price = 200;
+    if (value === 'Ventusa') price = 150;
     if (value === 'Ear Candling') price = 150;
-    if (value === 'Foot Scrub') price = 250;
+    if (value === 'Fire Massage') price = 150;
+    if (value === 'Hot Stone') price = 150;
     
     updateFormData({ 
       addOnService: value,
@@ -108,9 +109,10 @@ export function StepPreferences() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="None">No Add-ons</SelectItem>
-            <SelectItem value="Ventusa">Ventusa (+₱200)</SelectItem>
+            <SelectItem value="Ventusa">Ventusa (+₱150)</SelectItem>
             <SelectItem value="Ear Candling">Ear Candling (+₱150)</SelectItem>
-            <SelectItem value="Foot Scrub">Foot Scrub (+₱250)</SelectItem>
+            <SelectItem value="Fire Massage">Foot Scrub (+₱150)</SelectItem>
+            <SelectItem value="Hot Stone">Foot Scrub (+₱150)</SelectItem>
           </SelectContent>
         </Select>
 
