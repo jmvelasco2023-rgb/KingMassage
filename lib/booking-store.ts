@@ -1,7 +1,6 @@
 import { create } from 'zustand'
-import type { BookingFormData, ServiceType } from './types' // Updated type name for clarity
+import type { BookingFormData, ServiceType } from './types'
 
-// Define the correct BookingFormData type (ensure this matches your actual fields)
 export interface BookingFormData {
   name: string
   mobile: string
@@ -17,10 +16,8 @@ export interface BookingFormData {
   specialRequests: string
   addOnService: string
   addOnPrice: number
-  // Add any other fields you need
 }
 
-// Define initial form data with new add-on fields
 const initialFormData: BookingFormData = {
   name: '',
   mobile: '',
@@ -45,68 +42,69 @@ interface BookingStore {
   updateFormData: (data: Partial<BookingFormData>) => void
   resetForm: () => void
   calculateTotalDuration: () => number
-  nextStep: () => void // New: Handler for advancing steps
-  prevStep: () => void // New: Handler for going back
+  nextStep: () => void
+  prevStep: () => void
 }
 
 export const useBookingStore = create<BookingStore>((set, get) => ({
   currentStep: 1,
   formData: initialFormData,
   
-  // Set current step directly
+  // Updated: Limit to 1-5 steps
   setStep: (step: number) => set({ 
-    currentStep: Math.max(1, Math.min(step, 4)) // Limit to 1-4 steps
+    currentStep: Math.max(1, Math.min(step, 5)) 
   }),
   
-  // Update form data (supports partial updates)
   updateFormData: (data: Partial<BookingFormData>) => set((state) => ({
     formData: { ...state.formData, ...data }
   })),
   
-  // Reset form to initial state
   resetForm: () => set({
     currentStep: 1,
     formData: initialFormData
   }),
   
-  // Calculate total duration including add-ons
   calculateTotalDuration: () => {
     const { duration, extraMinutes, addOnService } = get().formData
+    // Ensures duration and extraMinutes are treated as numbers
     const addOnTime = addOnService !== 'None' ? 15 : 0
-    return duration + extraMinutes + addOnTime
+    return Number(duration) + Number(extraMinutes) + addOnTime
   },
   
-  // Advance to next step (if valid)
   nextStep: () => {
     const { currentStep, formData } = get()
     
-    // Validate current step before advancing
     let isStepValid = true
     switch(currentStep) {
-      case 1: // Service Selection Step
+      case 1: // Service Selection
         isStepValid = !!formData.service
         break
-      case 2: // Schedule Step
+      case 2: // Session Preferences & Add-ons
+        // Usually valid by default since they have initial values, 
+        // but you can add specific checks here if needed.
+        isStepValid = !!formData.pressurePreference && !!formData.focusArea
+        break
+      case 3: // Schedule
         isStepValid = !!formData.date && !!formData.time
         break
-      case 3: // Client Details Step
-        isStepValid = !!formData.name && !!formData.mobile
+      case 4: // Contact Details
+        isStepValid = formData.name.trim() !== '' && formData.mobile.trim() !== ''
         break
-      case 4: // Confirmation Step
+      case 5: // Review
         isStepValid = true
         break
     }
 
     if (isStepValid) {
       set((state) => ({
-        currentStep: Math.min(state.currentStep + 1, 4)
+        // Updated: Cap at 5
+        currentStep: Math.min(state.currentStep + 1, 5)
       }))
     } else {
       alert('Please complete all required fields to continue!')
     }
   },
   
-  // Go back to previous step
   prevStep: () => {
     set((state) => ({
       currentStep: Math.max(state.currentStep - 1, 1)
