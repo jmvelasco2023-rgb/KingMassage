@@ -50,6 +50,10 @@ export interface Booking {
   status: BookingStatus
   payment_proof_url: string | null
   created_at: string
+  // ✅ NEW: Rating fields
+  rating: number | null
+  review_comment: string | null
+  reviewed_at: string | null
 }
 
 // --- Form State Interface (Zustand) ---
