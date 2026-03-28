@@ -121,7 +121,7 @@ export function BookingsTable({
           setSelectedAddOn(prev => ({ ...prev, [booking.id]: '' }))
         }
 
-        const basePrice = booking.total_price || 600
+        const basePrice = 600
         const totalExtraMinutes = priorExtraMinutes + sessionExtraMinutes + adminAddedMinutes
         const extraTimePrice = calculatedTotal - basePrice - ((modifications.added_ons?.length || 0) * 150)
         const addOnsPrice = (modifications.added_ons?.length || 0) * 150
