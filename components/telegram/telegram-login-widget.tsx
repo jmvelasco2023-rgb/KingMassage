@@ -14,40 +14,40 @@ export function TelegramLoginWidget({
   redirectUrl = 'https://kingmassage-s6jh.onrender.com/auth/telegram-callback',
 }: TelegramLoginWidgetProps) {
   useEffect(() => {
-    // Load Telegram script
+    // Load Telegram Login Widget script
     const script = document.createElement('script')
     script.src = 'https://telegram.org/js/telegram-widget.js?22'
     script.async = true
+    script.onload = () => {
+      // Script loaded successfully
+      console.log('Telegram widget script loaded')
+    }
+    script.onerror = () => {
+      console.error('Failed to load Telegram widget script')
+    }
     document.body.appendChild(script)
 
-    // Initialize the widget after script loads
-    script.onload = () => {
-      if (window.Telegram?.Login) {
-        window.Telegram.Login.init({
-          bot_id: botUsername.replace('@', ''),
-          request_access: 'write',
-        })
-      }
-    }
-
     return () => {
-      if (document.body.contains(script)) {
+      // Cleanup is optional but safe
+      try {
         document.body.removeChild(script)
+      } catch (e) {
+        // Script already removed
       }
     }
-  }, [botUsername])
+  }, [])
 
   return (
-    <div
-      id={containerId}
-      data-telegram-login={botUsername}
-      data-size="large"
-      data-auth-url={redirectUrl}
-      data-request-access="write"
-      style={{
-        display: 'flex',
-        justifyContent: 'center',
-      }}
-    />
+    <div className="flex justify-center my-4">
+      <div
+        id={containerId}
+        data-telegram-login={botUsername}
+        data-size="large"
+        data-auth-url={redirectUrl}
+        data-request-access="write"
+        data-radius="20"
+        style={{ minHeight: '50px' }}
+      />
+    </div>
   )
 }
