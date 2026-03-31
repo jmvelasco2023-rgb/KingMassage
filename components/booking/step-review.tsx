@@ -34,7 +34,6 @@ export function StepReview() {
   const basePrice = BASE_SERVICE_PRICES[formData.service as keyof typeof BASE_SERVICE_PRICES] || 0
   const extraTimePrice = formData.extraMinutes === 15 ? 150 : formData.extraMinutes === 30 ? 250 : formData.extraMinutes === 45 ? 350 : 0
   
-  // Logic to determine add-on price based on your dropdown selection
   const getAddOnPrice = () => {
     switch (formData.addOnService) {
       case 'Ventusa': return 150;
@@ -60,17 +59,22 @@ export function StepReview() {
         throw new Error('Authentication required. Please log in to complete your booking.')
       }
 
-      // Check required fields (including new preference fields)
       if (!formData.name || !formData.mobile || !formData.date || !formData.time) {
         throw new Error('Missing information. Please ensure all details are filled.')
       }
 
-      // Prepare JSONB for add-ons (including the 15-minute duration)
       const addOnsData = formData.addOnService !== 'None' 
         ? [{ name: formData.addOnService, price: addOnPrice, duration_minutes: 15 }]
         : []
 
-      const { error } = await supabase
+      // ✅ Get user data including Telegram ID
+      const { data: userData } = await supabase
+        .from('users')
+        .select('telegram_id')
+        .eq('id', user.id)
+        .single()
+
+      const { data: insertedBooking, error } = await supabase
         .from('bookings')
         .insert({
           user_id: user.id,
@@ -84,15 +88,43 @@ export function StepReview() {
           total_price: totalPrice,
           date: format(new Date(formData.date), 'yyyy-MM-dd'),
           time: formData.time,
-          // Mapping the preference fields correctly to your database columns
           pressure_preference: formData.pressurePreference,
           focus_area: formData.focusArea,
           additional_needs: formData.additionalNeeds,
           special_requests: formData.specialRequests,
           status: 'pending'
         })
+        .select()
+        .single()
 
       if (error) throw error
+      
+      // ✅ NEW: Send Telegram notification if user has Telegram ID
+      if (userData?.telegram_id && insertedBooking) {
+        try {
+          await fetch('/api/notify-telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              telegramId: userData.telegram_id,
+              bookingData: {
+                bookingId: insertedBooking.id,
+                clientName: formData.name,
+                service: formData.service,
+                date: format(new Date(formData.date), 'MMMM dd, yyyy'),
+                time: formData.time,
+                duration: totalDuration,
+                totalPrice,
+                location: formData.location,
+                telegramId: userData.telegram_id,
+              },
+            }),
+          })
+        } catch (telegramError) {
+          console.error('Telegram notification failed:', telegramError)
+          // Don't fail the booking if Telegram notification fails
+        }
+      }
       
       setIsSuccess(true)
       setModalText('Your booking has been successfully saved. Our therapist will review and confirm within 24 hours.')
@@ -220,11 +252,10 @@ export function StepReview() {
         </Button>
       </div>
 
-      {/* ✅ ENHANCED: Dynamic Feedback Modal with Better UX & FIXED REDIRECT */}
+      {/* Enhanced Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[100] backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl text-center animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
-            {/* Icon Section */}
             <div className="flex justify-center mb-6">
               {isSubmitting ? (
                 <div className="relative w-16 h-16 flex items-center justify-center">
@@ -241,15 +272,12 @@ export function StepReview() {
               )}
             </div>
             
-            {/* Title */}
             <h3 className="text-2xl font-bold mb-3">
               {isSubmitting ? '⏳ Processing...' : isSuccess ? '✨ Booking Confirmed!' : '⚠️ Booking Failed'}
             </h3>
             
-            {/* Message */}
             <p className="text-slate-600 text-sm mb-6 leading-relaxed font-medium">{modalText}</p>
 
-            {/* Success Badge */}
             {!isSubmitting && isSuccess && (
               <div className="mb-6 inline-block animate-in scale-in-95 duration-500">
                 <Badge className="bg-emerald-100 text-emerald-800 px-4 py-2 border border-emerald-300 text-xs font-bold whitespace-nowrap">
@@ -258,7 +286,6 @@ export function StepReview() {
               </div>
             )}
             
-            {/* CTA Button */}
             {!isSubmitting && (
               <Button 
                 className={`w-full h-12 rounded-xl text-white font-bold transition-all hover:scale-105 ${
