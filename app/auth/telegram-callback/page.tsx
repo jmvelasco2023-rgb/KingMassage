@@ -32,7 +32,7 @@ function TelegramCallbackContent() {
 
         console.log('🔐 Processing Telegram login:', { telegramId, telegramUsername, email })
 
-        // STEP 1: Check if user already exists in users table
+        // STEP 1: Check if user already exists
         const { data: existingUser } = await supabase
           .from('users')
           .select('id')
@@ -40,21 +40,15 @@ function TelegramCallbackContent() {
           .single()
 
         if (existingUser) {
-          // EXISTING USER
-          console.log('✅ Existing Telegram user found:', existingUser.id)
+          console.log('✅ Existing Telegram user found')
           
-          // Just update their info
-          const { error: updateError } = await supabase
+          await supabase
             .from('users')
             .update({
               telegram_username: telegramUsername,
               telegram_photo_url: photo_url,
             })
             .eq('id', existingUser.id)
-
-          if (updateError) {
-            console.warn('⚠️ Update warning:', updateError.message)
-          }
 
           console.log('🎉 Existing user authenticated!')
           setTimeout(() => {
@@ -90,59 +84,65 @@ function TelegramCallbackContent() {
         const userId = signUpData.user.id
         console.log('✅ Auth user created:', userId)
 
-        // STEP 3: Wait for auth propagation
-        await new Promise(resolve => setTimeout(resolve, 3000))
-
-        // STEP 4: Create user profile - with RLS bypass using service role
-        // Since RLS is disabled, this should work, but we'll use an upsert for safety
-        const { error: upsertError } = await supabase
-          .from('users')
-          .upsert(
-            {
-              id: userId,
-              email,
-              telegram_id: telegramId,
-              telegram_username: telegramUsername,
-              telegram_photo_url: photo_url,
-              role: 'client',
-              created_at: new Date().toISOString(),
-            },
-            { onConflict: 'id' }
-          )
-
-        if (upsertError) {
-          console.error('❌ Upsert error:', upsertError)
-          console.error('Error details:', upsertError.details, upsertError.hint)
-          
-          // Fallback: Try simple insert
-          const { error: insertError } = await supabase
-            .from('users')
-            .insert({
-              id: userId,
-              email,
-              telegram_id: telegramId,
-              telegram_username: telegramUsername,
-              telegram_photo_url: photo_url,
-              role: 'client',
-              created_at: new Date().toISOString(),
-            })
-
-          if (insertError) {
-            throw new Error(`Profile creation failed: ${insertError.message}. Details: ${insertError.details}`)
-          }
-        }
-
-        console.log('✅ User profile created')
-
-        // STEP 5: Sign in
+        // STEP 3: Sign in immediately (before creating profile)
+        // This ensures the session is active
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password: stablePassword,
         })
 
         if (signInError) {
-          console.error('❌ Sign-in error:', signInError)
-          throw new Error(`Sign-in failed: ${signInError.message}`)
+          console.error('⚠️ Sign-in during setup failed:', signInError.message)
+          // Continue anyway
+        }
+
+        // STEP 4: Wait for auth sync (longer wait)
+        console.log('⏳ Waiting for auth sync...')
+        await new Promise(resolve => setTimeout(resolve, 5000))
+
+        // STEP 5: Create user profile with multiple retry attempts
+        let profileCreated = false
+        let retries = 0
+        const maxRetries = 5
+
+        while (!profileCreated && retries < maxRetries) {
+          try {
+            const { error: insertError } = await supabase
+              .from('users')
+              .insert({
+                id: userId,
+                email,
+                telegram_id: telegramId,
+                telegram_username: telegramUsername,
+                telegram_photo_url: photo_url,
+                role: 'client',
+                created_at: new Date().toISOString(),
+              })
+
+            if (!insertError) {
+              profileCreated = true
+              console.log('✅ User profile created successfully')
+            } else {
+              retries++
+              console.warn(`⚠️ Insert attempt ${retries}/${maxRetries} failed:`, insertError.message)
+              
+              if (retries < maxRetries) {
+                // Wait before retrying
+                await new Promise(resolve => setTimeout(resolve, 2000))
+              } else {
+                throw new Error(`Profile creation failed after ${maxRetries} attempts: ${insertError.message}`)
+              }
+            }
+          } catch (err) {
+            retries++
+            console.warn(`⚠️ Attempt ${retries}/${maxRetries} error:`, err)
+            
+            if (retries >= maxRetries) {
+              throw err
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 2000))
+          }
         }
 
         console.log('✅ New user signed in')
@@ -199,7 +199,7 @@ function TelegramCallbackContent() {
           </div>
         </div>
         <p className="text-lg font-semibold text-slate-700">Authenticating with Telegram...</p>
-        <p className="text-sm text-slate-500">Please wait while we set up your account</p>
+        <p className="text-sm text-slate-500">Setting up your profile...</p>
       </div>
     </div>
   )
