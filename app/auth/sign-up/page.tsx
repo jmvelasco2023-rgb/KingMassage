@@ -14,7 +14,6 @@ import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { FcGoogle } from 'react-icons/fc'
 
 export default function Page() {
   const [email, setEmail] = useState('')
@@ -26,51 +25,34 @@ export default function Page() {
   const router = useRouter()
   const supabase = createClient()
 
-  // Force mobile view on load
+  // ✅ Load Telegram widget
   useEffect(() => {
-    const lockMobileView = () => {
-      document.documentElement.style.width = 'device-width'
-      document.documentElement.style.overflowX = 'hidden'
-      if (window.innerWidth > 768) {
-        document.body.style.maxWidth = '375px'
-        document.body.style.margin = '0 auto'
+    const loadTelegramWidget = () => {
+      const script = document.createElement('script')
+      script.src = 'https://telegram.org/js/telegram-widget.js?23'
+      script.async = true
+      script.onload = () => {
+        // @ts-ignore - Telegram is injected globally
+        if (window.Telegram?.Login?.bind) {
+          // @ts-ignore
+          window.Telegram.Login.bind(
+            document.getElementById('telegram-signup-widget'),
+            'KingMassageBot',
+            {
+              size: 'large',
+              onAuth: (user: any) => handleTelegramSignUp(user),
+              requestAccess: 'write',
+            }
+          )
+        }
       }
+      document.body.appendChild(script)
     }
-    lockMobileView()
-    window.addEventListener('resize', lockMobileView)
-    return () => window.removeEventListener('resize', lockMobileView)
+
+    loadTelegramWidget()
   }, [])
 
-  // ✅ NEW: Load Telegram widget script
-  useEffect(() => {
-    const script = document.createElement('script')
-    script.src = 'https://telegram.org/js/telegram-widget.js?23'
-    script.async = true
-    script.onload = () => {
-      // @ts-ignore
-      if (window.Telegram?.Login?.bind) {
-        // @ts-ignore
-        window.Telegram.Login.bind(
-          document.getElementById('telegram-signup-widget'),
-          'KingMassageBot',
-          {
-            size: 'medium',
-            onAuth: (user: any) => handleTelegramSignUp(user),
-            requestAccess: 'write',
-          }
-        )
-      }
-    }
-    document.body.appendChild(script)
-    
-    return () => {
-      if (document.body.contains(script)) {
-        document.body.removeChild(script)
-      }
-    }
-  }, [])
-
-  // ✅ NEW: Handle Telegram sign up
+  // ✅ Handle Telegram signup
   const handleTelegramSignUp = async (telegramUser: any) => {
     try {
       setIsLoading(true)
@@ -79,11 +61,12 @@ export default function Page() {
       const telegramId = telegramUser.id
       const telegramUsername = telegramUser.username || telegramUser.first_name
       const email = `telegram_${telegramId}@kingmassage.app`
+      const tempPassword = `telegram_${telegramId}_${Date.now()}`
 
       // Create new user
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
-        password: `telegram_${telegramId}_password`,
+        password: tempPassword,
         options: {
           data: {
             telegram_id: telegramId,
@@ -97,9 +80,8 @@ export default function Page() {
 
       if (signUpError) throw signUpError
 
-      // Save to users table
       if (signUpData.user) {
-        await supabase
+        const { error: insertError } = await supabase
           .from('users')
           .insert({
             id: signUpData.user.id,
@@ -108,6 +90,8 @@ export default function Page() {
             telegram_username: telegramUsername,
             role: 'client',
           })
+
+        if (insertError) throw insertError
       }
 
       router.push('/auth/sign-up-success?telegram=true')
@@ -146,6 +130,7 @@ export default function Page() {
         },
       })
       if (error) throw error
+      router.push('/auth/sign-up-success?mobile=true')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred during sign-up')
     } finally {
@@ -230,7 +215,7 @@ export default function Page() {
 
               <Button
                 type="submit"
-                className="w-full bg-primary hover:bg-primary/90 text-white font-medium text-sm py-2"
+                className="w-full bg-primary hover:bg-primary/90 text-white font-medium text-sm py-3 rounded-xl transition-all hover:scale-105"
                 disabled={isLoading}
               >
                 {isLoading ? 'Creating account...' : 'Sign up'}
@@ -246,7 +231,7 @@ export default function Page() {
               <Button
                 type="button"
                 onClick={handleGoogleSignUp}
-                className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-medium text-sm py-2"
+                className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-medium text-sm py-3 rounded-xl transition-all"
                 disabled={isGoogleLoading}
               >
                 <svg className="mr-2 h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24">
@@ -270,19 +255,21 @@ export default function Page() {
                 {isGoogleLoading ? 'Processing...' : 'Continue with Google'}
               </Button>
 
-              {/* ✅ NEW: Telegram Widget Container */}
+              {/* ✅ TELEGRAM WIDGET - FIXED */}
               <div className="flex items-center gap-2 py-3">
                 <div className="flex-1 h-px bg-gray-200"></div>
                 <span className="text-xs sm:text-sm text-gray-500">Or</span>
                 <div className="flex-1 h-px bg-gray-200"></div>
               </div>
 
-              <div id="telegram-signup-widget" className="flex justify-center">
+              {/* Telegram Widget Container - INLINE SCRIPT */}
+              <div className="flex justify-center">
+                <div id="telegram-signup-widget"></div>
                 <script
                   async
                   src="https://telegram.org/js/telegram-widget.js?23"
                   data-telegram-login="KingMassageBot"
-                  data-size="medium"
+                  data-size="large"
                   data-auth-url="https://kingmassage-2jw1.onrender.com/auth/telegram-callback"
                   data-request-access="write"
                 ></script>
