@@ -11,39 +11,43 @@ interface TelegramLoginWidgetProps {
 export function TelegramLoginWidget({
   containerId,
   botUsername = 'KingMassageBot',
-  redirectUrl = 'https://kingmassage-2jw1.onrender.com/auth/telegram-callback',
+  redirectUrl = 'https://kingmassage-s6jh.onrender.com/auth/telegram-callback',
 }: TelegramLoginWidgetProps) {
   useEffect(() => {
-    // Create script element
+    // Load Telegram script
     const script = document.createElement('script')
-    script.src = 'https://telegram.org/js/telegram-widget.js'
+    script.src = 'https://telegram.org/js/telegram-widget.js?22'
     script.async = true
-    
-    // Add attributes for the widget
-    script.setAttribute('data-telegram-login', botUsername)
-    script.setAttribute('data-size', 'large')
-    script.setAttribute('data-auth-url', redirectUrl)
-    script.setAttribute('data-request-access', 'write')
-    script.setAttribute('data-radius', '20')
-    
-    // Add to DOM
-    const container = document.getElementById(containerId)
-    if (container) {
-      container.appendChild(script)
+    document.body.appendChild(script)
+
+    // Initialize the widget after script loads
+    script.onload = () => {
+      if (window.Telegram?.Login) {
+        window.Telegram.Login.init({
+          bot_id: botUsername.replace('@', ''),
+          request_access: 'write',
+        })
+      }
     }
 
     return () => {
-      if (container && script.parentNode === container) {
-        container.removeChild(script)
+      if (document.body.contains(script)) {
+        document.body.removeChild(script)
       }
     }
-  }, [containerId, botUsername, redirectUrl])
+  }, [botUsername])
 
   return (
-    <div 
-      id={containerId} 
-      className="flex justify-center my-4"
-      style={{ minHeight: '50px' }}
+    <div
+      id={containerId}
+      data-telegram-login={botUsername}
+      data-size="large"
+      data-auth-url={redirectUrl}
+      data-request-access="write"
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+      }}
     />
   )
 }
