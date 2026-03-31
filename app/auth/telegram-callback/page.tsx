@@ -30,7 +30,7 @@ function TelegramCallbackContent() {
         const email = `telegram_${telegramId}@kingmassage.app`
         const stablePassword = `telegram_verify_${telegramId}`
 
-        console.log('🔐 Processing Telegram login:', { telegramId, telegramUsername, email })
+        console.log('🔐 Processing Telegram login:', { telegramId, telegramUsername })
 
         // STEP 1: Check if user already exists
         const { data: existingUser } = await supabase
@@ -40,8 +40,9 @@ function TelegramCallbackContent() {
           .single()
 
         if (existingUser) {
-          console.log('✅ Existing Telegram user found')
+          console.log('✅ Existing user found')
           
+          // Update telegram info
           await supabase
             .from('users')
             .update({
@@ -57,11 +58,11 @@ function TelegramCallbackContent() {
           return
         }
 
-        // NEW USER - Create auth account
-        console.log('✨ Creating new Telegram user...')
+        // NEW USER
+        console.log('✨ Creating new user...')
 
-        // STEP 2: Create auth user
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        // STEP 2: Sign up (trigger will create profile automatically)
+        const { error: signUpError } = await supabase.auth.signUp({
           email,
           password: stablePassword,
           options: {
@@ -73,19 +74,16 @@ function TelegramCallbackContent() {
         })
 
         if (signUpError) {
-          console.error('❌ Auth signup error:', signUpError)
-          throw new Error(`Auth signup failed: ${signUpError.message}`)
+          console.error('❌ Signup error:', signUpError)
+          throw new Error(`Signup failed: ${signUpError.message}`)
         }
 
-        if (!signUpData.user?.id) {
-          throw new Error('User creation failed - no ID returned')
-        }
+        console.log('✅ Auth user created (profile auto-created by trigger)')
 
-        const userId = signUpData.user.id
-        console.log('✅ Auth user created:', userId)
+        // STEP 3: Wait for trigger to complete
+        await new Promise(resolve => setTimeout(resolve, 1000))
 
-        // STEP 3: Sign in to get authenticated session
-        console.log('🔑 Signing in...')
+        // STEP 4: Sign in
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password: stablePassword,
@@ -96,39 +94,23 @@ function TelegramCallbackContent() {
           throw new Error(`Sign-in failed: ${signInError.message}`)
         }
 
-        console.log('✅ User signed in - session established')
+        console.log('✅ User signed in')
 
-        // STEP 4: Wait a bit
-        await new Promise(resolve => setTimeout(resolve, 2000))
-
-        // STEP 5: Get current user to verify session
-        const { data: { user: currentUser } } = await supabase.auth.getUser()
-        console.log('✅ Current user session verified:', currentUser?.id)
-
-        if (!currentUser) {
-          throw new Error('Session verification failed - user not authenticated')
+        // STEP 5: Update telegram fields
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          await supabase
+            .from('users')
+            .update({
+              telegram_id: telegramId,
+              telegram_username: telegramUsername,
+              telegram_photo_url: photo_url,
+            })
+            .eq('id', user.id)
+          
+          console.log('✅ Telegram info saved')
         }
 
-        // STEP 6: Create user profile using authenticated session
-        console.log('📝 Creating user profile...')
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert({
-            id: currentUser.id, // Use the authenticated user ID
-            email: currentUser.email || email,
-            telegram_id: telegramId,
-            telegram_username: telegramUsername,
-            telegram_photo_url: photo_url,
-            role: 'client',
-            created_at: new Date().toISOString(),
-          })
-
-        if (insertError) {
-          console.error('❌ Insert error:', insertError)
-          throw new Error(`Profile creation failed: ${insertError.message}`)
-        }
-
-        console.log('✅ User profile created successfully')
         console.log('🎉 Telegram authentication complete!')
 
         setTimeout(() => {
@@ -136,7 +118,7 @@ function TelegramCallbackContent() {
         }, 500)
 
       } catch (err) {
-        console.error('❌ Telegram auth error:', err)
+        console.error('❌ Error:', err)
         const errorMessage = err instanceof Error ? err.message : 'Authentication failed.'
         setError(errorMessage)
         setIsProcessing(false)
