@@ -84,68 +84,51 @@ function TelegramCallbackContent() {
         const userId = signUpData.user.id
         console.log('✅ Auth user created:', userId)
 
-        // STEP 3: Sign in immediately (before creating profile)
-        // This ensures the session is active
+        // STEP 3: Sign in to get authenticated session
+        console.log('🔑 Signing in...')
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password: stablePassword,
         })
 
         if (signInError) {
-          console.error('⚠️ Sign-in during setup failed:', signInError.message)
-          // Continue anyway
+          console.error('❌ Sign-in error:', signInError)
+          throw new Error(`Sign-in failed: ${signInError.message}`)
         }
 
-        // STEP 4: Wait for auth sync (longer wait)
-        console.log('⏳ Waiting for auth sync...')
-        await new Promise(resolve => setTimeout(resolve, 5000))
+        console.log('✅ User signed in - session established')
 
-        // STEP 5: Create user profile with multiple retry attempts
-        let profileCreated = false
-        let retries = 0
-        const maxRetries = 5
+        // STEP 4: Wait a bit
+        await new Promise(resolve => setTimeout(resolve, 2000))
 
-        while (!profileCreated && retries < maxRetries) {
-          try {
-            const { error: insertError } = await supabase
-              .from('users')
-              .insert({
-                id: userId,
-                email,
-                telegram_id: telegramId,
-                telegram_username: telegramUsername,
-                telegram_photo_url: photo_url,
-                role: 'client',
-                created_at: new Date().toISOString(),
-              })
+        // STEP 5: Get current user to verify session
+        const { data: { user: currentUser } } = await supabase.auth.getUser()
+        console.log('✅ Current user session verified:', currentUser?.id)
 
-            if (!insertError) {
-              profileCreated = true
-              console.log('✅ User profile created successfully')
-            } else {
-              retries++
-              console.warn(`⚠️ Insert attempt ${retries}/${maxRetries} failed:`, insertError.message)
-              
-              if (retries < maxRetries) {
-                // Wait before retrying
-                await new Promise(resolve => setTimeout(resolve, 2000))
-              } else {
-                throw new Error(`Profile creation failed after ${maxRetries} attempts: ${insertError.message}`)
-              }
-            }
-          } catch (err) {
-            retries++
-            console.warn(`⚠️ Attempt ${retries}/${maxRetries} error:`, err)
-            
-            if (retries >= maxRetries) {
-              throw err
-            }
-            
-            await new Promise(resolve => setTimeout(resolve, 2000))
-          }
+        if (!currentUser) {
+          throw new Error('Session verification failed - user not authenticated')
         }
 
-        console.log('✅ New user signed in')
+        // STEP 6: Create user profile using authenticated session
+        console.log('📝 Creating user profile...')
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert({
+            id: currentUser.id, // Use the authenticated user ID
+            email: currentUser.email || email,
+            telegram_id: telegramId,
+            telegram_username: telegramUsername,
+            telegram_photo_url: photo_url,
+            role: 'client',
+            created_at: new Date().toISOString(),
+          })
+
+        if (insertError) {
+          console.error('❌ Insert error:', insertError)
+          throw new Error(`Profile creation failed: ${insertError.message}`)
+        }
+
+        console.log('✅ User profile created successfully')
         console.log('🎉 Telegram authentication complete!')
 
         setTimeout(() => {
