@@ -181,40 +181,47 @@ function BookingCard({ booking, isExpanded, onToggleExpand, onChatOpen, onCancel
       {!isPast && <div className={cn("h-1.5 w-full", isCompleted ? "bg-blue-500" : "bg-emerald-500")} />}
       
       <CardContent className="p-0">
-        {/* Collapsible Header */}
+        {/* ✅ FIXED: Better Collapsible Header Layout - No Overlap */}
         <div
-          className="p-6 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-center justify-between"
+          className="p-6 cursor-pointer hover:bg-slate-50/50 transition-colors space-y-3"
           onClick={onToggleExpand}
         >
-          <div className="flex items-start gap-3 flex-1 min-w-0">
-            <div className={cn("p-3 rounded-2xl shrink-0", isPast ? "bg-slate-100" : isCompleted ? "bg-blue-50" : "bg-emerald-50")}>
-              {isCompleted ? (
-                <CheckCircle2 className="w-5 h-5 text-blue-600" />
-              ) : (
-                <Sparkles className={cn("w-5 h-5", isPast ? "text-slate-400" : "text-emerald-600")} />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="font-bold text-lg text-slate-900 leading-tight">{booking.service}</h3>
-              <div className="flex items-center gap-1.5 mt-1.5 text-xs text-slate-500 font-medium">
-                <MapPin className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">{booking.location}</span>
+          {/* Top Row: Icon + Service Name + Chevron */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <div className={cn("p-3 rounded-2xl shrink-0", isPast ? "bg-slate-100" : isCompleted ? "bg-blue-50" : "bg-emerald-50")}>
+                {isCompleted ? (
+                  <CheckCircle2 className="w-5 h-5 text-blue-600" />
+                ) : (
+                  <Sparkles className={cn("w-5 h-5", isPast ? "text-slate-400" : "text-emerald-600")} />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-lg text-slate-900 leading-tight truncate">{booking.service}</h3>
               </div>
             </div>
+            
+            {/* Chevron Icon */}
+            {isExpanded ? (
+              <ChevronUp className="w-5 h-5 text-slate-400 shrink-0 mt-1" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-slate-400 shrink-0 mt-1" />
+            )}
           </div>
-          
-          <div className="flex items-center gap-3 shrink-0">
+
+          {/* Bottom Row: Location + Badge (Separated) */}
+          <div className="flex items-center justify-between gap-3 pl-12">
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium min-w-0">
+              <MapPin className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{booking.location}</span>
+            </div>
+            
             <Badge className={cn(
               STATUS_STYLES[booking.status as keyof typeof STATUS_STYLES],
-              "border-none px-3 py-1.5 rounded-full text-[9px] uppercase tracking-wider font-bold"
+              "border-none px-3 py-1.5 rounded-full text-[9px] uppercase tracking-wider font-bold whitespace-nowrap shrink-0"
             )}>
               {STATUS_LABELS[booking.status as keyof typeof STATUS_LABELS]}
             </Badge>
-            {isExpanded ? (
-              <ChevronUp className="w-5 h-5 text-slate-400" />
-            ) : (
-              <ChevronDown className="w-5 h-5 text-slate-400" />
-            )}
           </div>
         </div>
 
@@ -240,7 +247,7 @@ function BookingCard({ booking, isExpanded, onToggleExpand, onChatOpen, onCancel
               </div>
             </div>
 
-            {/* Add-ons - ✅ FIX: Now displays properly */}
+            {/* Add-ons */}
             {hasAddOns && (
               <div className="flex items-start gap-2.5 p-3 bg-emerald-50/50 rounded-2xl">
                 <Plus className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -257,7 +264,7 @@ function BookingCard({ booking, isExpanded, onToggleExpand, onChatOpen, onCancel
               </div>
             )}
 
-            {/* Date & Time - ✅ FIX: Duration now shows admin-added time */}
+            {/* Date & Time */}
             <div className={cn("grid grid-cols-3 gap-3 p-4 rounded-2xl", isPast ? "bg-slate-100/50" : "bg-slate-50")}>
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-slate-400" />
@@ -287,7 +294,7 @@ function BookingCard({ booking, isExpanded, onToggleExpand, onChatOpen, onCancel
               </div>
             </div>
 
-            {/* Price Display - ✅ NEW: Show total price if available */}
+            {/* Price Display */}
             {booking.total_price && (
               <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100">
                 <p className="text-[9px] text-emerald-600 uppercase font-bold tracking-wider mb-1">Total Price</p>
@@ -295,7 +302,7 @@ function BookingCard({ booking, isExpanded, onToggleExpand, onChatOpen, onCancel
               </div>
             )}
 
-            {/* Rating Display (if completed and rated) - ✅ FIX: Moved inside expanded section */}
+            {/* Rating Display */}
             {isCompleted && isRated && (
               <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
                 <div className="flex items-start gap-3">
