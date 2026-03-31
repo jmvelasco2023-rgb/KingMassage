@@ -150,11 +150,11 @@ export default function Page() {
                 </div>
               </div>
 
-              {/* ✅ TELEGRAM WIDGET - SIMPLIFIED */}
+              {/* ✅ TELEGRAM WIDGET - UPDATED URL */}
               <TelegramLoginWidget
                 containerId="telegram-login"
                 botUsername="KingMassageBot"
-                redirectUrl="https://kingmassage-2jw1.onrender.com/auth/telegram-callback"
+                redirectUrl="https://kingmassage-s6jh.onrender.com/auth/telegram-callback"
               />
             </form>
 
