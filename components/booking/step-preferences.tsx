@@ -12,11 +12,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { MessageSquare, Info, Sparkles, Clock } from 'lucide-react'
+import { MessageSquare, Info, Sparkles } from 'lucide-react'
 
 export function StepPreferences() {
   const { formData, updateFormData, nextStep, prevStep } = useBookingStore()
 
+  // Function to map add-on names to their specific prices
   const handleAddOnLine = (value: string) => {
     let price = 0;
     if (value === 'Ventusa') price = 150;
@@ -28,10 +29,6 @@ export function StepPreferences() {
       addOnService: value,
       addOnPrice: price 
     });
-  }
-
-  const handleExtraTime = (minutes: number) => {
-    updateFormData({ extraMinutes: minutes })
   }
 
   return (
@@ -91,79 +88,14 @@ export function StepPreferences() {
         </div>
       </div>
 
-      {/* 2. EXTRA TIME OPTIONS - ✅ NEW: Now shows prices */}
-      <div className="space-y-4 p-5 bg-blue-50/50 rounded-2xl border border-blue-100 ring-1 ring-blue-100/50">
-        <div className="flex items-center gap-2">
-          <Clock className="w-4 h-4 text-blue-600" />
-          <Label className="text-sm font-bold text-blue-900">Extra Time (Optional)</Label>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-3">
-          <Button
-            type="button"
-            variant={formData.extraMinutes === 0 ? 'default' : 'outline'}
-            className={`h-12 rounded-xl font-semibold transition-all ${
-              formData.extraMinutes === 0 
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
-                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-            onClick={() => handleExtraTime(0)}
-          >
-            No extra time
-          </Button>
-          
-          <Button
-            type="button"
-            variant={formData.extraMinutes === 15 ? 'default' : 'outline'}
-            className={`h-12 rounded-xl font-semibold transition-all flex flex-col items-center justify-center ${
-              formData.extraMinutes === 15 
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
-                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-            onClick={() => handleExtraTime(15)}
-          >
-            <span className="text-xs">+15 mins</span>
-            <span className="text-sm font-bold">₱150</span>
-          </Button>
-          
-          <Button
-            type="button"
-            variant={formData.extraMinutes === 30 ? 'default' : 'outline'}
-            className={`h-12 rounded-xl font-semibold transition-all flex flex-col items-center justify-center ${
-              formData.extraMinutes === 30 
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
-                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-            onClick={() => handleExtraTime(30)}
-          >
-            <span className="text-xs">+30 mins</span>
-            <span className="text-sm font-bold">₱250</span>
-          </Button>
-          
-          <Button
-            type="button"
-            variant={formData.extraMinutes === 45 ? 'default' : 'outline'}
-            className={`h-12 rounded-xl font-semibold transition-all flex flex-col items-center justify-center ${
-              formData.extraMinutes === 45 
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
-                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-            onClick={() => handleExtraTime(45)}
-          >
-            <span className="text-xs">+45 mins</span>
-            <span className="text-sm font-bold">₱350</span>
-          </Button>
-        </div>
-      </div>
-
-      {/* 3. ADD-ON SERVICES DROPDOWN */}
+      {/* 2. ADD-ON SERVICES DROPDOWN */}
       <div className="space-y-4 p-5 bg-emerald-50/50 rounded-2xl border border-emerald-100 ring-1 ring-emerald-100/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-emerald-600" />
             <Label className="text-sm font-bold text-emerald-900">Add-on Services</Label>
           </div>
-          <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 border-none px-2 py-0.5 text-[10px]">
+          <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 border-none px-2 py-0.5 text-[10px] whitespace-nowrap">
             +15 MINS
           </Badge>
         </div>
