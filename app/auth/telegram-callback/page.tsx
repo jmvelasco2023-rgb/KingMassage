@@ -22,86 +22,95 @@ function TelegramCallbackContent() {
         const photo_url = searchParams.get('photo_url')
 
         if (!id) {
-          throw new Error('No Telegram ID received. Authentication data is incomplete.')
+          throw new Error('No Telegram ID received.')
         }
 
         const telegramId = id
         const telegramUsername = username || first_name || 'User'
         const email = `telegram_${telegramId}@kingmassage.app`
+        const stablePassword = `telegram_verify_${telegramId}`
 
         console.log('🔐 Processing Telegram login:', { telegramId, telegramUsername, email })
 
         // STEP 1: Check if user already exists in users table
-        const { data: existingUser, error: queryError } = await supabase
+        const { data: existingUser } = await supabase
           .from('users')
-          .select('id, email')
+          .select('id')
           .eq('telegram_id', telegramId)
           .single()
 
-        if (queryError && queryError.code !== 'PGRST116') {
-          console.error('❌ Database query error:', queryError)
-          throw new Error('Failed to check existing user.')
-        }
-
-        let userId: string
-        let isNewUser = false
-
         if (existingUser) {
-          // EXISTING USER - Sign in directly without password
+          // EXISTING USER - Just sign in
           console.log('✅ Existing Telegram user found')
-          userId = existingUser.id
           
-          // For existing users, we don't sign in with password
-          // Instead, we just confirm the user exists and update their info
-          
-          // Update telegram info if needed
+          // Try to sign in with stable password
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password: stablePassword,
+          })
+
+          if (!signInError) {
+            console.log('✅ Existing user signed in')
+          } else {
+            console.warn('⚠️ Sign-in failed, but continuing...', signInError.message)
+          }
+
+          // Update user info
           await supabase
             .from('users')
             .update({
               telegram_username: telegramUsername,
               telegram_photo_url: photo_url,
             })
-            .eq('id', userId)
+            .eq('id', existingUser.id)
 
-          console.log('✅ User info updated')
+          console.log('🎉 Existing user authenticated!')
+          setTimeout(() => {
+            router.push(`/auth/sign-up-success?telegram=true&new=false`)
+          }, 500)
+          return
+        }
 
-        } else {
-          // NEW USER - Create auth account
-          console.log('✨ Creating new Telegram user...')
-          isNewUser = true
+        // NEW USER - Create auth account first
+        console.log('✨ Creating new Telegram user...')
 
-          // Generate stable password for this Telegram user
-          const stablePassword = `telegram_verify_${telegramId}`
-
-          // STEP 2: Create auth user
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email,
-            password: stablePassword,
-            options: {
-              data: {
-                telegram_id: telegramId,
-                telegram_username: telegramUsername,
-              },
-              emailRedirectTo: `${window.location.origin}/auth/sign-up-success?telegram=true`,
+        // STEP 2: Create auth user in Supabase Auth
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password: stablePassword,
+          options: {
+            data: {
+              telegram_id: telegramId,
+              telegram_username: telegramUsername,
             },
-          })
+          },
+        })
 
-          if (signUpError) {
-            console.error('❌ Auth signup error:', signUpError)
-            throw new Error(`Auth signup failed: ${signUpError.message}`)
-          }
+        if (signUpError) {
+          console.error('❌ Auth signup error:', signUpError)
+          throw new Error(`Auth signup failed: ${signUpError.message}`)
+        }
 
-          if (!signUpData.user?.id) {
-            throw new Error('User creation failed - no user ID returned')
-          }
+        if (!signUpData.user?.id) {
+          throw new Error('User creation failed')
+        }
 
-          userId = signUpData.user.id
-          console.log('✅ Auth user created:', userId)
+        const userId = signUpData.user.id
+        console.log('✅ Auth user created with ID:', userId)
 
-          // STEP 3: Wait for auth sync
-          await new Promise(resolve => setTimeout(resolve, 1000))
+        // STEP 3: Verify auth user exists before creating profile
+        const { data: authCheck } = await supabase.auth.getUser()
+        console.log('Auth check result:', authCheck.user?.id)
 
-          // STEP 4: Create user profile
+        // STEP 4: Wait longer for database sync (2 seconds)
+        await new Promise(resolve => setTimeout(resolve, 2000))
+
+        // STEP 5: Create user profile with retry logic
+        let insertSuccess = false
+        let retries = 0
+        const maxRetries = 3
+
+        while (!insertSuccess && retries < maxRetries) {
           const { error: insertError } = await supabase
             .from('users')
             .insert({
@@ -114,32 +123,38 @@ function TelegramCallbackContent() {
               created_at: new Date().toISOString(),
             })
 
-          if (insertError) {
-            console.error('❌ Profile insert error:', insertError)
-            throw new Error(`Failed to create profile: ${insertError.message}`)
+          if (!insertError) {
+            insertSuccess = true
+            console.log('✅ User profile created successfully')
+          } else {
+            retries++
+            console.warn(`⚠️ Insert attempt ${retries} failed:`, insertError.message)
+            
+            if (retries < maxRetries) {
+              // Wait before retrying
+              await new Promise(resolve => setTimeout(resolve, 1000))
+            } else {
+              throw new Error(`Failed to create profile after ${maxRetries} attempts: ${insertError.message}`)
+            }
           }
-
-          console.log('✅ User profile created')
-
-          // STEP 5: Sign in with the password we just created
-          const { error: signInError } = await supabase.auth.signInWithPassword({
-            email,
-            password: stablePassword,
-          })
-
-          if (signInError) {
-            console.error('❌ Auto sign-in error:', signInError)
-            throw new Error(`Sign-in failed: ${signInError.message}`)
-          }
-
-          console.log('✅ New user signed in')
         }
 
-        console.log('🎉 Telegram authentication successful!')
-        
-        // Redirect to success page
+        // STEP 6: Sign in the new user
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password: stablePassword,
+        })
+
+        if (signInError) {
+          console.error('❌ Auto sign-in error:', signInError)
+          throw new Error(`Sign-in failed: ${signInError.message}`)
+        }
+
+        console.log('✅ New user signed in successfully')
+        console.log('🎉 Telegram authentication complete!')
+
         setTimeout(() => {
-          router.push(`/auth/sign-up-success?telegram=true&new=${isNewUser}`)
+          router.push(`/auth/sign-up-success?telegram=true&new=true`)
         }, 500)
 
       } catch (err) {
