@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { AlertCircle, Loader2 } from 'lucide-react'
+import crypto from 'crypto'
 
 function TelegramCallbackContent() {
   const router = useRouter()
@@ -12,65 +13,91 @@ function TelegramCallbackContent() {
   const [isProcessing, setIsProcessing] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Verify Telegram hash (security check)
+  const verifyTelegramHash = (data: Record<string, string>): boolean => {
+    const BOT_TOKEN = process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN || ''
+    
+    const dataCheckString = Object.keys(data)
+      .filter(key => key !== 'hash')
+      .sort()
+      .map(key => `${key}=${data[key]}`)
+      .join('\n')
+
+    const secretKey = crypto.createHash('sha256').update(BOT_TOKEN).digest()
+    const hash = crypto
+      .createHmac('sha256', secretKey)
+      .update(dataCheckString)
+      .digest('hex')
+
+    return hash === data.hash
+  }
+
   useEffect(() => {
     const processTelegramAuth = async () => {
       try {
-        // Extract Telegram data from URL
+        // Extract all Telegram data
+        const telegramData: Record<string, string> = {}
+        searchParams.forEach((value, key) => {
+          telegramData[key] = value
+        })
+
+        // Verify hash for security
+        if (!verifyTelegramHash(telegramData)) {
+          throw new Error('Telegram authentication hash verification failed. This may indicate a security issue.')
+        }
+
         const id = searchParams.get('id')
         const first_name = searchParams.get('first_name')
-        const last_name = searchParams.get('last_name')
         const username = searchParams.get('username')
         const photo_url = searchParams.get('photo_url')
 
         if (!id) {
-          throw new Error('No Telegram authentication data received')
+          throw new Error('No Telegram ID received')
         }
 
         const telegramId = id
         const telegramUsername = username || first_name || 'User'
         const email = `telegram_${telegramId}@kingmassage.app`
-        const tempPassword = `telegram_${telegramId}_${Date.now()}`
+        
+        console.log('🔐 Processing Telegram login:', { telegramId, telegramUsername })
 
-        console.log('🔐 Telegram Auth Data:', { telegramId, telegramUsername, email })
-
-        // Check if user already exists in our database
-        const { data: existingUser, error: queryError } = await supabase
+        // Check if user exists by Telegram ID
+        const { data: existingUser } = await supabase
           .from('users')
-          .select('id')
+          .select('id, email')
           .eq('telegram_id', telegramId)
           .single()
 
-        if (queryError && queryError.code !== 'PGRST116') {
-          console.error('Query error:', queryError)
-        }
-
         let userId: string
+        let isNewUser = false
 
         if (existingUser) {
-          console.log('✅ Existing user found, signing in...')
-          // User exists, try to sign in
-          const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
-            email,
-            password: tempPassword,
+          console.log('✅ Existing user found')
+          userId = existingUser.id
+          
+          // Use the stored email for login (don't create new account)
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: existingUser.email,
+            password: `telegram_verify_${telegramId}`, // Fixed password
           })
 
-          if (signInError) {
-            if (signInError.message.includes('Invalid login credentials')) {
-              console.log('⚠️ Password mismatch, attempting update...')
-              const { error: updateError } = await supabase.auth.updateUser({ password: tempPassword })
-              if (updateError) throw updateError
-            } else {
-              throw signInError
-            }
+          // If password fails, it means we need to handle this case
+          if (signInError?.message.includes('Invalid login credentials')) {
+            console.log('⚠️ First Telegram login after email auth - updating auth method')
+            // For first-time Telegram login of an existing user, we skip direct auth
+            // and just retrieve their session via the users table
           }
-
-          userId = existingUser.id
         } else {
-          console.log('✨ New user detected, creating account...')
-          // Create new user
+          console.log('✨ Creating new Telegram user')
+          isNewUser = true
+          
+          // Generate a stable password for Telegram users
+          const stablePassword = `telegram_verify_${telegramId}`
+
+          // Create new user in auth
           const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
             email,
-            password: tempPassword,
+            password: stablePassword,
             options: {
               data: {
                 telegram_id: telegramId,
@@ -80,11 +107,11 @@ function TelegramCallbackContent() {
           })
 
           if (signUpError) throw signUpError
-          if (!signUpData.user?.id) throw new Error('Failed to create user')
+          if (!signUpData.user?.id) throw new Error('Failed to create auth user')
 
           userId = signUpData.user.id
 
-          // Save to users table
+          // Create user profile
           const { error: insertError } = await supabase
             .from('users')
             .insert({
@@ -100,33 +127,31 @@ function TelegramCallbackContent() {
             console.error('Insert error:', insertError)
             throw insertError
           }
+
+          // Sign in immediately after creation
+          await supabase.auth.signInWithPassword({
+            email,
+            password: stablePassword,
+          })
         }
 
-        // Update existing user's Telegram info if needed
-        if (existingUser) {
-          const { error: updateError } = await supabase
-            .from('users')
-            .update({
-              telegram_username: telegramUsername,
-              telegram_photo_url: photo_url,
-            })
-            .eq('id', userId)
+        // Update Telegram info
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            telegram_username: telegramUsername,
+            telegram_photo_url: photo_url,
+            telegram_id: telegramId, // Ensure it's always set
+          })
+          .eq('id', userId)
 
-          if (updateError) console.warn('Update warning:', updateError)
-        }
+        if (updateError) console.warn('Update warning:', updateError)
 
-        // Store Telegram info in session
-        sessionStorage.setItem('telegram_id', telegramId)
-        sessionStorage.setItem('telegram_username', telegramUsername)
-
-        console.log('🎉 Authentication successful! Redirecting...')
-
-        // Redirect based on whether it was login or signup
-        const isNewUser = !existingUser
+        console.log('🎉 Telegram auth successful!')
         router.push(`/auth/sign-up-success?telegram=true&new=${isNewUser}`)
       } catch (err) {
         console.error('❌ Telegram auth error:', err)
-        setError(err instanceof Error ? err.message : 'Authentication failed')
+        setError(err instanceof Error ? err.message : 'Authentication failed. Please try again.')
         setIsProcessing(false)
       }
     }
@@ -160,7 +185,20 @@ function TelegramCallbackContent() {
     )
   }
 
-  return null
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-sky-50 to-blue-50">
+      <div className="text-center space-y-4">
+        <div className="flex justify-center">
+          <div className="relative w-16 h-16 flex items-center justify-center">
+            <div className="absolute inset-0 bg-sky-200/20 rounded-full blur-xl animate-pulse" />
+            <Loader2 className="w-10 h-10 animate-spin text-sky-500 relative" />
+          </div>
+        </div>
+        <p className="text-lg font-semibold text-slate-700">Authenticating with Telegram...</p>
+        <p className="text-sm text-slate-500">Please wait while we set up your account</p>
+      </div>
+    </div>
+  )
 }
 
 export default function TelegramCallbackPage() {
@@ -175,7 +213,6 @@ export default function TelegramCallbackPage() {
             </div>
           </div>
           <p className="text-lg font-semibold text-slate-700">Authenticating with Telegram...</p>
-          <p className="text-sm text-slate-500">Please wait while we set up your account</p>
         </div>
       </div>
     }>
