@@ -32,24 +32,28 @@ function TelegramCallbackContent() {
 
         console.log('🔐 Processing Telegram login:', { telegramId, telegramUsername })
 
-        // STEP 1: Check if user already exists
-        const { data: existingUser } = await supabase
-          .from('users')
-          .select('id')
-          .eq('telegram_id', telegramId)
-          .single()
+        // STEP 1: Check if user already exists in auth.users by email
+        const { data: { user: authUser } } = await supabase.auth.signInWithPassword({
+          email,
+          password: stablePassword,
+        })
 
-        if (existingUser) {
-          console.log('✅ Existing user found')
+        if (authUser) {
+          // EXISTING USER - Already signed in
+          console.log('✅ Existing user signed in')
           
           // Update telegram info
-          await supabase
+          const { error: updateError } = await supabase
             .from('users')
             .update({
               telegram_username: telegramUsername,
               telegram_photo_url: photo_url,
             })
-            .eq('id', existingUser.id)
+            .eq('id', authUser.id)
+
+          if (updateError) {
+            console.warn('⚠️ Update warning:', updateError.message)
+          }
 
           console.log('🎉 Existing user authenticated!')
           setTimeout(() => {
@@ -58,10 +62,9 @@ function TelegramCallbackContent() {
           return
         }
 
-        // NEW USER
+        // NEW USER - Try to sign up
         console.log('✨ Creating new user...')
 
-        // STEP 2: Sign up (trigger will create profile automatically)
         const { error: signUpError } = await supabase.auth.signUp({
           email,
           password: stablePassword,
@@ -74,16 +77,52 @@ function TelegramCallbackContent() {
         })
 
         if (signUpError) {
+          // If signup failed because user already exists, try signing in again
+          if (signUpError.message.includes('already registered')) {
+            console.log('👤 User already exists, signing in...')
+            
+            const { data: { user: existingAuthUser }, error: signInError } = 
+              await supabase.auth.signInWithPassword({
+                email,
+                password: stablePassword,
+              })
+
+            if (signInError) {
+              throw new Error(`Sign-in failed: ${signInError.message}`)
+            }
+
+            if (!existingAuthUser) {
+              throw new Error('Sign-in failed - no user returned')
+            }
+
+            console.log('✅ Existing user signed in')
+            
+            // Update telegram info
+            await supabase
+              .from('users')
+              .update({
+                telegram_username: telegramUsername,
+                telegram_photo_url: photo_url,
+              })
+              .eq('id', existingAuthUser.id)
+
+            console.log('🎉 Existing user authenticated!')
+            setTimeout(() => {
+              router.push(`/auth/sign-up-success?telegram=true&new=false`)
+            }, 500)
+            return
+          }
+
           console.error('❌ Signup error:', signUpError)
           throw new Error(`Signup failed: ${signUpError.message}`)
         }
 
         console.log('✅ Auth user created (profile auto-created by trigger)')
 
-        // STEP 3: Wait for trigger to complete
+        // STEP 2: Wait for trigger to complete
         await new Promise(resolve => setTimeout(resolve, 1000))
 
-        // STEP 4: Sign in
+        // STEP 3: Sign in the new user
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password: stablePassword,
@@ -94,9 +133,9 @@ function TelegramCallbackContent() {
           throw new Error(`Sign-in failed: ${signInError.message}`)
         }
 
-        console.log('✅ User signed in')
+        console.log('✅ New user signed in')
 
-        // STEP 5: Update telegram fields
+        // STEP 4: Update telegram fields
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
           await supabase
