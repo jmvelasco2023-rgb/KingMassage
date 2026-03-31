@@ -26,55 +26,6 @@ export default function Page() {
   const router = useRouter()
   const supabase = createClient()
 
-  // ✅ Handle Telegram signup
-  const handleTelegramSignUp = async (telegramUser: any) => {
-    try {
-      setIsLoading(true)
-      setError(null)
-
-      const telegramId = telegramUser.id
-      const telegramUsername = telegramUser.username || telegramUser.first_name
-      const email = `telegram_${telegramId}@kingmassage.app`
-      const tempPassword = `telegram_${telegramId}_${Date.now()}`
-
-      // Create new user
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password: tempPassword,
-        options: {
-          data: {
-            telegram_id: telegramId,
-            telegram_username: telegramUsername,
-          },
-          emailRedirectTo:
-            process.env.NEXT_PUBLIC_SIGNUP_REDIRECT_URL ||
-            `${window.location.origin}/auth/sign-up-success?telegram=true`,
-        },
-      })
-
-      if (signUpError) throw signUpError
-
-      if (signUpData.user) {
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert({
-            id: signUpData.user.id,
-            email,
-            telegram_id: telegramId,
-            telegram_username: telegramUsername,
-            role: 'client',
-          })
-
-        if (insertError) throw insertError
-      }
-
-      router.push('/auth/sign-up-success?telegram=true')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Telegram sign-up failed')
-      setIsLoading(false)
-    }
-  }
-
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -99,11 +50,11 @@ export default function Page() {
         options: {
           emailRedirectTo:
             process.env.NEXT_PUBLIC_SIGNUP_REDIRECT_URL ||
-            `${window.location.origin}/auth/sign-up-success?mobile=true`,
+            `${window.location.origin}/auth/sign-up-success`,
         },
       })
       if (error) throw error
-      router.push('/auth/sign-up-success?mobile=true')
+      router.push('/auth/sign-up-success')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred during sign-up')
     } finally {
@@ -121,7 +72,7 @@ export default function Page() {
         options: {
           redirectTo:
             process.env.NEXT_PUBLIC_SIGNUP_REDIRECT_URL ||
-            `${window.location.origin}/auth/sign-up-success?mobile=true`,
+            `${window.location.origin}/auth/sign-up-success`,
           pkceVerifierStorage: 'cookie',
           flowType: 'pkce',
         },
@@ -129,7 +80,7 @@ export default function Page() {
       if (error) throw error
       if (data?.url) window.location.replace(data.url)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google sign-up failed - try clearing cache')
+      setError(err instanceof Error ? err.message : 'Google sign-up failed')
     } finally {
       setIsGoogleLoading(false)
     }
@@ -157,8 +108,10 @@ export default function Page() {
                   required
                   placeholder="your@email.com"
                   className="w-full text-sm"
+                  autoComplete="email"
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-medium">Password</Label>
                 <Input
@@ -167,10 +120,12 @@ export default function Page() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  placeholder="••���•••••"
+                  placeholder="••••••••"
                   className="w-full text-sm"
+                  autoComplete="new-password"
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="repeat-password" className="text-sm font-medium">Repeat Password</Label>
                 <Input
@@ -181,10 +136,15 @@ export default function Page() {
                   required
                   placeholder="••••••••"
                   className="w-full text-sm"
+                  autoComplete="new-password"
                 />
               </div>
 
-              {error && <p className="text-red-500 text-xs sm:text-sm font-medium text-center">{error}</p>}
+              {error && (
+                <p className="text-red-500 text-xs sm:text-sm font-medium text-center bg-red-50 p-2 rounded-lg">
+                  {error}
+                </p>
+              )}
 
               <Button
                 type="submit"
@@ -194,13 +154,15 @@ export default function Page() {
                 {isLoading ? 'Creating account...' : 'Sign up'}
               </Button>
 
-              <div className="flex items-center gap-2 py-3">
-                <div className="flex-1 h-px bg-gray-200"></div>
-                <span className="text-xs sm:text-sm text-gray-500">Or continue with</span>
-                <div className="flex-1 h-px bg-gray-200"></div>
+              <div className="relative py-3">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500">Or continue with</span>
+                </div>
               </div>
 
-              {/* Google Button */}
               <Button
                 type="button"
                 onClick={handleGoogleSignUp}
@@ -213,26 +175,28 @@ export default function Page() {
                   <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                   <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                 </svg>
-                {isGoogleLoading ? 'Processing...' : 'Continue with Google'}
+                {isGoogleLoading ? 'Processing...' : 'Google'}
               </Button>
 
-              {/* ✅ TELEGRAM WIDGET */}
-              <div className="flex items-center gap-2 py-3">
-                <div className="flex-1 h-px bg-gray-200"></div>
-                <span className="text-xs sm:text-sm text-gray-500">Or</span>
-                <div className="flex-1 h-px bg-gray-200"></div>
+              <div className="relative py-3">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500">Telegram</span>
+                </div>
               </div>
 
+              {/* ✅ TELEGRAM WIDGET - SIMPLIFIED */}
               <TelegramLoginWidget
-                containerId="telegram-signup-widget"
+                containerId="telegram-signup"
                 botUsername="KingMassageBot"
                 redirectUrl="https://kingmassage-2jw1.onrender.com/auth/telegram-callback"
-                onAuth={handleTelegramSignUp}
               />
 
-              <div className="mt-4 text-center text-xs sm:text-sm text-gray-600">
+              <div className="mt-6 text-center text-xs sm:text-sm text-gray-600">
                 Already have an account?{' '}
-                <Link href="/auth/login" className="underline text-primary font-medium">
+                <Link href="/auth/login" className="underline text-primary font-semibold hover:text-primary/80">
                   Login here
                 </Link>
               </div>
