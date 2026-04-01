@@ -43,18 +43,19 @@ export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProp
     }
   }
 
-  // ✅ UPDATED: Fixed to match your exact Supabase column names
+  // ✅ UPDATED: Added Math.round to ensure integers for int4 columns and fixed Notification logic
   async function handleComplete(id: string, finalEarnings: number, bookingData?: any) {
     try {
       const { error } = await supabase
         .from('bookings')
         .update({
           status: 'completed',
-          earnings: finalEarnings,
-          total_price: bookingData?.total_price || finalEarnings,
+          // Ensure these are clean integers for Supabase int4
+          earnings: Math.round(Number(finalEarnings)),
+          total_price: Math.round(Number(bookingData?.total_price || finalEarnings)),
           
-          // These now match your Supabase schema exactly:
-          session_extra_minutes: bookingData?.session_extra_minutes || 0,
+          // Match your verified Supabase column names
+          session_extra_minutes: Math.round(Number(bookingData?.session_extra_minutes || 0)),
           session_add_ons: bookingData?.session_add_ons || [],
           
           updated_at: new Date().toISOString()
@@ -65,16 +66,23 @@ export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProp
 
       const booking = bookings.find(b => b.id === id)
       if (booking) {
-        await sendTelegramNotice(
-          booking.user_id,
-          `✅ Session Completed!\n\nYour massage session has been completed.\nFinal Amount: ₱${finalEarnings}\n\nThank you for choosing King's Massage! 🙏`
-        )
+        // Find the actual Telegram ID from the users list to send the notice
+        const clientProfile = users.find(u => u.id === booking.user_id)
+        const telegramId = clientProfile?.telegram_chat_id || clientProfile?.telegram_id
+
+        if (telegramId) {
+          await sendTelegramNotice(
+            telegramId,
+            `✅ Session Completed!\n\nYour massage session has been completed.\nFinal Amount: ₱${finalEarnings}\n\nThank you for choosing King's Massage! 🙏`
+          )
+        }
       }
 
       router.refresh()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error completing booking:', error)
-      alert('Failed to complete booking')
+      // Showing the specific error message helps debug if it fails again
+      alert(`Failed to complete: ${error.message || 'Check database connection'}`)
     }
   }
 
@@ -89,8 +97,11 @@ export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProp
 
       const booking = bookings.find(b => b.id === id)
       if (booking) {
+        const clientProfile = users.find(u => u.id === booking.user_id)
+        const telegramId = clientProfile?.telegram_chat_id || clientProfile?.telegram_id
+
         await sendTelegramNotice(
-          booking.user_id,
+          telegramId,
           `✅ Your booking has been approved!\n\nService: ${booking.service}\nDate: ${booking.date}\nTime: ${booking.time}\n\nPlease send payment proof. Thank you! 🙏`
         )
       }
@@ -113,8 +124,11 @@ export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProp
 
       const booking = bookings.find(b => b.id === id)
       if (booking) {
+        const clientProfile = users.find(u => u.id === booking.user_id)
+        const telegramId = clientProfile?.telegram_chat_id || clientProfile?.telegram_id
+
         await sendTelegramNotice(
-          booking.user_id,
+          telegramId,
           `❌ Your booking request has been declined.\n\nPlease try booking another time. If you have questions, feel free to message us. 💬`
         )
       }
