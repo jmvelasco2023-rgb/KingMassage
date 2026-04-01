@@ -43,22 +43,18 @@ export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProp
     }
   }
 
-  // ✅ UPDATED: Added Math.round to ensure integers for int4 columns and fixed Notification logic
+  // ✅ FIXED: Removed updated_at which caused the "column not found" error
   async function handleComplete(id: string, finalEarnings: number, bookingData?: any) {
     try {
       const { error } = await supabase
         .from('bookings')
         .update({
           status: 'completed',
-          // Ensure these are clean integers for Supabase int4
           earnings: Math.round(Number(finalEarnings)),
           total_price: Math.round(Number(bookingData?.total_price || finalEarnings)),
-          
-          // Match your verified Supabase column names
           session_extra_minutes: Math.round(Number(bookingData?.session_extra_minutes || 0)),
           session_add_ons: bookingData?.session_add_ons || [],
-          
-          updated_at: new Date().toISOString()
+          // updated_at was removed because it is missing from your Supabase table
         })
         .eq('id', id)
 
@@ -66,7 +62,6 @@ export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProp
 
       const booking = bookings.find(b => b.id === id)
       if (booking) {
-        // Find the actual Telegram ID from the users list to send the notice
         const clientProfile = users.find(u => u.id === booking.user_id)
         const telegramId = clientProfile?.telegram_chat_id || clientProfile?.telegram_id
 
@@ -81,7 +76,6 @@ export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProp
       router.refresh()
     } catch (error: any) {
       console.error('Error completing booking:', error)
-      // Showing the specific error message helps debug if it fails again
       alert(`Failed to complete: ${error.message || 'Check database connection'}`)
     }
   }
@@ -140,7 +134,6 @@ export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProp
     }
   }
 
-  // Calculate stats
   const pendingCount = bookings.filter(b => b.status === 'pending').length
   const approvedCount = bookings.filter(b => b.status === 'approved').length
   const completedCount = bookings.filter(b => b.status === 'completed').length
@@ -154,7 +147,6 @@ export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProp
 
       <main className="py-8 px-4">
         <div className="container mx-auto max-w-6xl">
-          {/* Page Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3 mb-2">
               <LayoutDashboard className="w-8 h-8 text-emerald-600" />
@@ -163,35 +155,13 @@ export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProp
             <p className="text-slate-600">Manage bookings and clients</p>
           </div>
 
-          {/* Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <StatCard
-              label="Pending"
-              value={pendingCount}
-              icon={Calendar}
-              color="amber"
-            />
-            <StatCard
-              label="Approved"
-              value={approvedCount}
-              icon={Calendar}
-              color="emerald"
-            />
-            <StatCard
-              label="Completed"
-              value={completedCount}
-              icon={Flame}
-              color="blue"
-            />
-            <StatCard
-              label="Earnings"
-              value={formatPHP(totalEarnings)}
-              icon={DollarSign}
-              color="green"
-            />
+            <StatCard label="Pending" value={pendingCount} icon={Calendar} color="amber" />
+            <StatCard label="Approved" value={approvedCount} icon={Calendar} color="emerald" />
+            <StatCard label="Completed" value={completedCount} icon={Flame} color="blue" />
+            <StatCard label="Earnings" value={formatPHP(totalEarnings)} icon={DollarSign} color="green" />
           </div>
 
-          {/* Tabs */}
           <Tabs defaultValue="bookings" className="space-y-6">
             <TabsList className="grid w-full grid-cols-2 bg-white border border-slate-200 rounded-xl p-1">
               <TabsTrigger value="bookings">Bookings</TabsTrigger>
