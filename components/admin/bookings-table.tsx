@@ -35,7 +35,6 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
         const status = (booking.status || 'pending').toLowerCase()
         const mods = bookingModifications[booking.id] || { extra_minutes: 0, added_ons: [] }
         
-        // ✅ FIXED: startingPrice defaults to 600 if total_price is null
         const calculatedTotal = useMemo(() => {
           const startingPrice = booking.total_price || 600
           const adminMinutesCost = (mods.extra_minutes / 15) * 150
@@ -43,7 +42,6 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
           return startingPrice + adminMinutesCost + adminAddOnsCost
         }, [booking.total_price, mods.extra_minutes, mods.added_ons])
 
-        // ✅ FIXED: Added (booking.extra_minutes || 0) to prevent NaN errors
         const baseDuration = booking.duration || 60
         const displayDuration = baseDuration + (booking.extra_minutes || 0) + mods.extra_minutes
 
@@ -82,7 +80,6 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
 
             {isExpanded && (
               <div className="border-t border-slate-100 p-5 space-y-4 bg-slate-50/50 animate-in fade-in">
-                {/* Client Details */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-[9px] text-slate-400 uppercase font-bold">Client</p>
@@ -102,7 +99,6 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                   </div>
                 </div>
 
-                {/* Duration Breakdown */}
                 <div className="bg-white rounded-xl p-4 space-y-2 border border-slate-100">
                   <div className="flex items-center gap-2 mb-3">
                     <Clock className="w-4 h-4 text-slate-600" />
@@ -114,7 +110,6 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                       <span className="text-slate-600">Base Duration:</span>
                       <span className="font-bold">{baseDuration}m</span>
                     </div>
-                    {/* ✅ FIXED: Added check for null extra_minutes */}
                     {(booking.extra_minutes || 0) > 0 && (
                       <div className="flex justify-between text-emerald-700">
                         <span>Original Extra:</span>
@@ -134,7 +129,6 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                   </div>
                 </div>
 
-                {/* ✅ FIXED: Added (booking.add_ons || []) safety check */}
                 {((booking.add_ons || []).length > 0 || mods.added_ons.length > 0) && (
                   <div className="bg-white rounded-xl p-4 space-y-2 border border-slate-100">
                     <div className="flex items-center gap-2 mb-3">
@@ -143,7 +137,6 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                     </div>
 
                     <div className="space-y-2">
-                      {/* ✅ FIXED: Added (booking.add_ons || []) to prevent .map() crash */}
                       {(booking.add_ons || []).map((addon: any, idx: number) => (
                         <div key={idx} className="flex justify-between items-center text-sm">
                           <span className="text-slate-700">{addon}</span>
@@ -168,7 +161,6 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                   </div>
                 )}
 
-                {/* Modify Session */}
                 {status === 'approved' && (
                   <div className="bg-blue-50 rounded-xl p-4 space-y-3 border border-blue-100">
                     <div className="flex items-center gap-2 mb-2">
@@ -176,9 +168,10 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                       <p className="text-sm font-bold text-blue-900">Add to This Session</p>
                     </div>
 
-                    <div className="flex gap-2">
+                    {/* ✅ FIXED: Use grid-cols-2 for better dropdown spacing */}
+                    <div className="grid grid-cols-2 gap-2">
                       <select 
-                        className="flex-1 bg-white rounded-lg px-3 py-2 text-xs font-bold text-slate-600 border border-blue-200"
+                        className="w-full bg-white rounded-lg px-3 py-2.5 text-xs font-bold text-slate-700 border border-blue-200 outline-none"
                         value={selectedExtend[booking.id] || ''}
                         onChange={(e) => {
                           const minutes = parseInt(e.target.value);
@@ -191,14 +184,14 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                           }
                         }}
                       >
-                        <option value="">+ Add Extra Time</option>
+                        <option value="">+ Time</option>
                         <option value="15">+15m (₱150)</option>
                         <option value="30">+30m (₱250)</option>
                         <option value="45">+45m (₱350)</option>
                       </select>
 
                       <select 
-                        className="flex-1 bg-white rounded-lg px-3 py-2 text-xs font-bold text-slate-600 border border-blue-200"
+                        className="w-full bg-white rounded-lg px-3 py-2.5 text-xs font-bold text-slate-700 border border-blue-200 outline-none"
                         value={selectedAddOn[booking.id] || ''}
                         onChange={(e) => {
                           const service = ADD_ON_OPTIONS.find(s => s.name === e.target.value);
@@ -211,9 +204,9 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                           }
                         }}
                       >
-                        <option value="">+ Add Service</option>
+                        <option value="">+ Service</option>
                         {ADD_ON_OPTIONS.map((opt, i) => (
-                          <option key={i} value={opt.name}>{opt.name} (+₱{opt.price})</option>
+                          <option key={i} value={opt.name}>{opt.name}</option>
                         ))}
                       </select>
                     </div>
@@ -222,7 +215,7 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                       <Button
                         variant="outline"
                         size="sm"
-                        className="w-full text-red-600 hover:text-red-700"
+                        className="w-full text-red-600 hover:text-red-700 h-9"
                         onClick={() => {
                           setBookingModifications(prev => ({
                             ...prev,
@@ -237,7 +230,6 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                   </div>
                 )}
 
-                {/* Price Breakdown */}
                 <div className="bg-emerald-50 rounded-xl p-4 space-y-2 border border-emerald-100">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertCircle className="w-4 h-4 text-emerald-700" />
@@ -271,7 +263,6 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                   </div>
                 </div>
 
-                {/* Action Buttons */}
                 <div className="flex gap-2 pt-2 border-t border-slate-100">
                   {status === 'pending' && (
                     <>
@@ -295,9 +286,11 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                     <Button
                       className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                       onClick={() => {
+                        // ✅ FIXED: Map objects to names before sending to DB
+                        const sessionAddOns = mods.added_ons.map((a: any) => a.name);
                         onComplete(booking.id, calculatedTotal, {
-                          // ✅ FIXED: Added safety check for spreading add_ons
-                          add_ons: [...(booking.add_ons || []), ...mods.added_ons.map((a: any) => a.name)],
+                          status: 'completed',
+                          add_ons: [...(booking.add_ons || []), ...sessionAddOns],
                           extra_minutes: (booking.extra_minutes || 0) + mods.extra_minutes,
                           total_price: calculatedTotal
                         });
