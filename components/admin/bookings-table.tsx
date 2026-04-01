@@ -35,7 +35,7 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
         const status = (booking.status || 'pending').toLowerCase()
         const mods = bookingModifications[booking.id] || { extra_minutes: 0, added_ons: [] }
         
-        // ✅ START FROM DB PRICE: Ensures original price + additions = final total
+        // ✅ FIXED: startingPrice defaults to 600 if total_price is null
         const calculatedTotal = useMemo(() => {
           const startingPrice = booking.total_price || 600
           const adminMinutesCost = (mods.extra_minutes / 15) * 150
@@ -43,7 +43,7 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
           return startingPrice + adminMinutesCost + adminAddOnsCost
         }, [booking.total_price, mods.extra_minutes, mods.added_ons])
 
-        // ✅ TRANSPARENCY: Calculate display duration
+        // ✅ FIXED: Added (booking.extra_minutes || 0) to prevent NaN errors
         const baseDuration = booking.duration || 60
         const displayDuration = baseDuration + (booking.extra_minutes || 0) + mods.extra_minutes
 
@@ -86,23 +86,23 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-[9px] text-slate-400 uppercase font-bold">Client</p>
-                    <p className="text-sm font-bold text-slate-900 mt-1">{booking.name}</p>
+                    <p className="text-sm font-bold text-slate-900 mt-1">{booking.name || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-[9px] text-slate-400 uppercase font-bold">Mobile</p>
-                    <p className="text-sm font-bold text-slate-900 mt-1">{booking.mobile}</p>
+                    <p className="text-sm font-bold text-slate-900 mt-1">{booking.mobile || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-[9px] text-slate-400 uppercase font-bold">Location</p>
-                    <p className="text-sm font-bold text-slate-900 mt-1">{booking.location}</p>
+                    <p className="text-sm font-bold text-slate-900 mt-1">{booking.location || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-[9px] text-slate-400 uppercase font-bold">Time</p>
-                    <p className="text-sm font-bold text-slate-900 mt-1">{booking.time}</p>
+                    <p className="text-sm font-bold text-slate-900 mt-1">{booking.time || 'N/A'}</p>
                   </div>
                 </div>
 
-                {/* ✅ TRANSPARENCY: Duration Breakdown */}
+                {/* Duration Breakdown */}
                 <div className="bg-white rounded-xl p-4 space-y-2 border border-slate-100">
                   <div className="flex items-center gap-2 mb-3">
                     <Clock className="w-4 h-4 text-slate-600" />
@@ -114,7 +114,8 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                       <span className="text-slate-600">Base Duration:</span>
                       <span className="font-bold">{baseDuration}m</span>
                     </div>
-                    {booking.extra_minutes > 0 && (
+                    {/* ✅ FIXED: Added check for null extra_minutes */}
+                    {(booking.extra_minutes || 0) > 0 && (
                       <div className="flex justify-between text-emerald-700">
                         <span>Original Extra:</span>
                         <span className="font-bold">+{booking.extra_minutes}m</span>
@@ -133,8 +134,8 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                   </div>
                 </div>
 
-                {/* ✅ TRANSPARENCY: Add-ons Breakdown */}
-                {(booking.add_ons?.length > 0 || mods.added_ons.length > 0) && (
+                {/* ✅ FIXED: Added (booking.add_ons || []) safety check */}
+                {((booking.add_ons || []).length > 0 || mods.added_ons.length > 0) && (
                   <div className="bg-white rounded-xl p-4 space-y-2 border border-slate-100">
                     <div className="flex items-center gap-2 mb-3">
                       <Gift className="w-4 h-4 text-emerald-600" />
@@ -142,7 +143,8 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                     </div>
 
                     <div className="space-y-2">
-                      {booking.add_ons?.map((addon: any, idx: number) => (
+                      {/* ✅ FIXED: Added (booking.add_ons || []) to prevent .map() crash */}
+                      {(booking.add_ons || []).map((addon: any, idx: number) => (
                         <div key={idx} className="flex justify-between items-center text-sm">
                           <span className="text-slate-700">{addon}</span>
                           <span className="text-[10px] text-slate-500 font-medium">(Original)</span>
@@ -150,25 +152,23 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                       ))}
 
                       {mods.added_ons.length > 0 && (
-                        <>
-                          <div className="border-t border-emerald-200 pt-2">
-                            <p className="text-[10px] font-bold text-emerald-600 mb-2">✨ Adding During Session:</p>
-                            {mods.added_ons.map((addon: any, idx: number) => (
-                              <div key={idx} className="flex justify-between items-center text-sm mb-1">
-                                <span className="text-emerald-700 font-medium">{addon.name}</span>
-                                <span className="inline-block px-2 py-0.5 bg-emerald-600 text-white text-[9px] rounded-full font-bold">
-                                  +₱{addon.price}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </>
+                        <div className="border-t border-emerald-200 pt-2">
+                          <p className="text-[10px] font-bold text-emerald-600 mb-2">✨ Adding During Session:</p>
+                          {mods.added_ons.map((addon: any, idx: number) => (
+                            <div key={idx} className="flex justify-between items-center text-sm mb-1">
+                              <span className="text-emerald-700 font-medium">{addon.name}</span>
+                              <span className="inline-block px-2 py-0.5 bg-emerald-600 text-white text-[9px] rounded-full font-bold">
+                                +₱{addon.price}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </div>
                 )}
 
-                {/* ✅ Modify Session (Only for Approved) */}
+                {/* Modify Session */}
                 {status === 'approved' && (
                   <div className="bg-blue-50 rounded-xl p-4 space-y-3 border border-blue-100">
                     <div className="flex items-center gap-2 mb-2">
@@ -218,7 +218,6 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                       </select>
                     </div>
 
-                    {/* Remove Last Added Item */}
                     {mods.added_ons.length > 0 && (
                       <Button
                         variant="outline"
@@ -238,7 +237,7 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                   </div>
                 )}
 
-                {/* ✅ TRANSPARENCY: Price Breakdown */}
+                {/* Price Breakdown */}
                 <div className="bg-emerald-50 rounded-xl p-4 space-y-2 border border-emerald-100">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertCircle className="w-4 h-4 text-emerald-700" />
@@ -248,7 +247,7 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <span className="text-slate-600">Original Booking:</span>
-                      <span className="font-bold">₱{booking.total_price}</span>
+                      <span className="font-bold">₱{booking.total_price || 0}</span>
                     </div>
 
                     {mods.extra_minutes > 0 && (
@@ -297,7 +296,8 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                       className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                       onClick={() => {
                         onComplete(booking.id, calculatedTotal, {
-                          add_ons: [...(booking.add_ons || []), ...mods.added_ons.map(a => a.name)],
+                          // ✅ FIXED: Added safety check for spreading add_ons
+                          add_ons: [...(booking.add_ons || []), ...mods.added_ons.map((a: any) => a.name)],
                           extra_minutes: (booking.extra_minutes || 0) + mods.extra_minutes,
                           total_price: calculatedTotal
                         });
