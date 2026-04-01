@@ -6,8 +6,6 @@ import { Header } from '@/components/header'
 import { BookingsList } from '@/components/bookings/bookings-list'
 import { Calendar, Loader2, AlertCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-// ✅ IMPORT: If you have a Rating Modal component, import it here
-// import { RatingModal } from '@/components/modals/rating-modal' 
 
 export default function MyBookingsPage() {
   const router = useRouter()
@@ -17,13 +15,14 @@ export default function MyBookingsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>('')
 
-  // ✅ ADDED: State to track which booking is being rated
-  const [isRatingModalOpen, setIsRatingModalOpen] = useState(false)
+  // State to store which booking is currently being rated
   const [selectedBooking, setSelectedBooking] = useState<any>(null)
 
   const fetchBookings = async () => {
     try {
       const supabase = createClient()
+      
+      // 1. Get current authenticated user
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       
       if (authError || !user) {
@@ -34,13 +33,15 @@ export default function MyBookingsPage() {
       setUserId(user.id)
       setUserName(user.user_metadata?.full_name || user.email?.split('@')[0] || 'Client')
 
+      // 2. Fetch bookings specifically for this user
       const { data, error: bookingError } = await supabase
         .from('bookings')
         .select('*')
         .eq('user_id', user.id)
-        .order('date', { ascending: false })
+        .order('date', { ascending: false }) 
 
       if (bookingError) throw bookingError
+
       setBookings(data || [])
     } catch (err: any) {
       console.error('Fetch error:', err)
@@ -50,24 +51,13 @@ export default function MyBookingsPage() {
     }
   }
 
-  // ✅ ADDED: Handlers for the buttons
+  // ✅ ADDED: This function connects the button click to your logic
   const handleRate = (booking: any) => {
-    console.log("Rate button clicked for:", booking.id)
+    console.log("Opening rate handler for booking ID:", booking.id)
     setSelectedBooking(booking)
-    setIsRatingModalOpen(true)
-    // If you don't have a modal yet, you could alert for testing:
-    // alert(`Rating session for ${booking.service}`)
-  }
-
-  const handleChat = (booking: any) => {
-    router.push(`/messages?bookingId=${booking.id}`)
-  }
-
-  const handleCancel = async (booking: any) => {
-    if (confirm('Are you sure you want to cancel this booking?')) {
-      // Logic to update Supabase status to 'cancelled' would go here
-      console.log("Cancelling:", booking.id)
-    }
+    
+    // Logic for opening your rating modal or navigating to a review page goes here
+    // Example: setIsRatingModalOpen(true)
   }
 
   useEffect(() => {
@@ -95,6 +85,7 @@ export default function MyBookingsPage() {
       <main className="flex-1 py-10 px-4">
         <div className="container mx-auto max-w-3xl">
           
+          {/* Page Header */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
@@ -109,6 +100,7 @@ export default function MyBookingsPage() {
             </div>
           </div>
 
+          {/* Error Message */}
           {error && (
             <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-xl flex items-center gap-3 text-destructive text-sm">
               <AlertCircle className="h-5 w-5" />
@@ -116,24 +108,15 @@ export default function MyBookingsPage() {
             </div>
           )}
           
+          {/* Main Bookings List Component */}
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* ✅ FIXED: Passed the handlers into the component */}
+            {/* ✅ FIXED: Added onRate prop to the component */}
             <BookingsList 
               bookings={bookings} 
               userId={userId} 
               onRate={handleRate}
-              onChatOpen={handleChat}
-              onCancel={handleCancel}
             />
           </div>
-
-          {/* ✅ PLACEHOLDER: Your Rating Modal would go here */}
-          {/* isRatingModalOpen && (
-            <RatingModal 
-              booking={selectedBooking} 
-              onClose={() => setIsRatingModalOpen(false)} 
-            />
-          )*/}
 
         </div>
       </main>
