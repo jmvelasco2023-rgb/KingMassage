@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 export function Header() {
   const pathname = usePathname()
   const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<any>(null) // Added for King's Massage profile data
+  const [profile, setProfile] = useState<any>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const supabase = createClient()
 
@@ -32,7 +32,6 @@ export function Header() {
     }
   }, [])
 
-  // ✅ New Effect: Fetch the friendly name from your public.users table
   useEffect(() => {
     if (user) {
       const fetchProfile = async () => {
@@ -55,7 +54,6 @@ export function Header() {
     setProfile(null)
   }
 
-  // ✅ Logic to hide the long technical email
   const displayName = profile?.telegram_username || (user?.email?.includes('telegram_') 
     ? "Client" 
     : user?.email?.split('@')[0])
@@ -63,63 +61,57 @@ export function Header() {
   const isActive = (path: string) => pathname === path
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2">
-          <Leaf className="h-6 w-6 text-emerald-500" />
-          <span className="font-bold text-lg tracking-tight">King's Massage</span>
+    // ✅ Sticky Header with Glass effect
+    <header className="sticky top-0 z-[100] w-full border-b border-slate-200/50 bg-white/80 backdrop-blur-md shadow-sm">
+      <div className="container flex h-16 items-center justify-between px-4 mx-auto">
+        <Link href="/" className="flex items-center gap-2 group">
+          <div className="bg-emerald-100 p-1.5 rounded-lg group-hover:bg-emerald-200 transition-colors">
+            <Leaf className="h-5 w-5 text-emerald-600" />
+          </div>
+          <span className="font-bold text-lg tracking-tight text-slate-900">King's Massage</span>
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-6">
-          <Link 
-            href="/" 
-            className={cn(
-              "text-sm font-medium transition-colors hover:text-primary",
-              isActive('/') ? 'text-emerald-600' : 'text-muted-foreground'
-            )}
-          >
-            Home
-          </Link>
-          <Link 
-            href="/book" 
-            className={cn(
-              "text-sm font-medium transition-colors hover:text-primary",
-              isActive('/book') ? 'text-emerald-600' : 'text-muted-foreground'
-            )}
-          >
-            Book Now
-          </Link>
-          {user && (
-            <Link 
-              href="/my-bookings" 
-              className={cn(
-                "text-sm font-medium transition-colors hover:text-primary",
-                isActive('/my-bookings') ? 'text-emerald-600' : 'text-muted-foreground'
-              )}
-            >
-              My Bookings
-            </Link>
-          )}
+        <nav className="hidden md:flex items-center gap-8">
+          {[
+            { name: 'Home', path: '/' },
+            { name: 'Book Now', path: '/book' },
+            { name: 'My Bookings', path: '/my-bookings', auth: true }
+          ].map((item) => (
+            (!item.auth || user) && (
+              <Link 
+                key={item.path}
+                href={item.path} 
+                className={cn(
+                  "text-sm font-semibold transition-all hover:text-emerald-600 relative py-1",
+                  isActive(item.path) 
+                    ? 'text-emerald-600 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-emerald-600 after:rounded-full' 
+                    : 'text-slate-500'
+                )}
+              >
+                {item.name}
+              </Link>
+            )
+          ))}
         </nav>
 
-        <div className="hidden md:flex items-center gap-4">
+        <div className="hidden md:flex items-center gap-5">
           {user ? (
-            <div className="flex items-center gap-4">
-              <div className="flex flex-col items-end">
+            <div className="flex items-center gap-4 pl-4 border-l border-slate-200">
+              <div className="flex flex-col items-end leading-tight">
                 <span className="text-sm font-bold text-slate-900">{displayName}</span>
-                <span className="text-[10px] text-slate-400 uppercase tracking-tighter">Premium Member</span>
+                <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest">Active</span>
               </div>
-              <Button variant="outline" size="sm" onClick={handleSignOut} className="rounded-xl font-bold text-xs">
+              <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-slate-500 hover:text-red-600 font-bold transition-colors">
                 Sign Out
               </Button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" asChild className="font-bold">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="sm" asChild className="font-bold text-slate-600">
                 <Link href="/auth/login">Sign In</Link>
               </Button>
-              <Button size="sm" asChild className="bg-emerald-600 hover:bg-emerald-700 font-bold rounded-xl px-5">
+              <Button size="sm" asChild className="bg-emerald-600 hover:bg-emerald-700 font-bold rounded-xl px-6 shadow-md shadow-emerald-100">
                 <Link href="/auth/sign-up">Sign Up</Link>
               </Button>
             </div>
@@ -130,23 +122,23 @@ export function Header() {
         <Button
           variant="ghost"
           size="icon"
-          className="md:hidden"
+          className="md:hidden rounded-xl bg-slate-50"
           onClick={() => setIsMenuOpen(!isMenuOpen)}
         >
-          {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          {isMenuOpen ? <X className="h-5 w-5 text-slate-600" /> : <Menu className="h-5 w-5 text-slate-600" />}
         </Button>
       </div>
 
-      {/* Mobile Menu */}
+      {/* Mobile Menu - Stays within sticky container */}
       {isMenuOpen && (
-        <div className="md:hidden border-t bg-background animate-in slide-in-from-top-1">
-          <nav className="container flex flex-col gap-4 py-6 px-4">
+        <div className="md:hidden border-t border-slate-100 bg-white/95 backdrop-blur-xl animate-in slide-in-from-top-2 duration-300">
+          <nav className="container flex flex-col gap-1 py-6 px-4 mx-auto">
             <Link 
               href="/" 
               onClick={() => setIsMenuOpen(false)}
               className={cn(
-                "text-base font-bold py-2",
-                isActive('/') ? 'text-emerald-600' : 'text-slate-600'
+                "text-base font-bold p-3 rounded-xl transition-colors",
+                isActive('/') ? 'bg-emerald-50 text-emerald-600' : 'text-slate-600 active:bg-slate-50'
               )}
             >
               Home
@@ -155,8 +147,8 @@ export function Header() {
               href="/book"
               onClick={() => setIsMenuOpen(false)}
               className={cn(
-                "text-base font-bold py-2",
-                isActive('/book') ? 'text-emerald-600' : 'text-slate-600'
+                "text-base font-bold p-3 rounded-xl transition-colors",
+                isActive('/book') ? 'bg-emerald-50 text-emerald-600' : 'text-slate-600 active:bg-slate-50'
               )}
             >
               Book Now
@@ -166,35 +158,35 @@ export function Header() {
                 href="/my-bookings"
                 onClick={() => setIsMenuOpen(false)}
                 className={cn(
-                  "text-base font-bold py-2",
-                  isActive('/my-bookings') ? 'text-emerald-600' : 'text-slate-600'
+                  "text-base font-bold p-3 rounded-xl transition-colors",
+                  isActive('/my-bookings') ? 'bg-emerald-50 text-emerald-600' : 'text-slate-600 active:bg-slate-50'
                 )}
               >
                 My Bookings
               </Link>
             )}
-            <div className="pt-6 mt-2 border-t border-slate-100">
+            <div className="mt-4 pt-4 border-t border-slate-100">
               {user ? (
                 <div className="flex flex-col gap-4">
-                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl">
-                    <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                  <div className="flex items-center gap-3 p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100">
+                    <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-200">
                       <UserIcon className="h-5 w-5" />
                     </div>
                     <div className="flex flex-col">
                       <span className="text-sm font-bold text-slate-900">{displayName}</span>
-                      <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Client Account</span>
+                      <span className="text-[10px] text-emerald-600 font-black uppercase tracking-widest">Premium Member</span>
                     </div>
                   </div>
-                  <Button variant="destructive" size="lg" onClick={handleSignOut} className="rounded-2xl font-bold w-full">
+                  <Button variant="outline" size="lg" onClick={handleSignOut} className="rounded-2xl font-bold border-red-100 text-red-600 hover:bg-red-50">
                     Sign Out
                   </Button>
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
-                  <Button variant="outline" size="lg" asChild className="rounded-2xl font-bold">
+                  <Button variant="outline" size="lg" asChild className="rounded-2xl font-bold border-slate-200">
                     <Link href="/auth/login">Sign In</Link>
                   </Button>
-                  <Button size="lg" asChild className="bg-emerald-600 hover:bg-emerald-700 rounded-2xl font-bold">
+                  <Button size="lg" asChild className="bg-emerald-600 hover:bg-emerald-700 rounded-2xl font-bold shadow-lg shadow-emerald-100">
                     <Link href="/auth/sign-up">Sign Up</Link>
                   </Button>
                 </div>
