@@ -6,7 +6,6 @@ import { Header } from '@/components/header'
 import { BookingsList } from '@/components/bookings/bookings-list'
 import { Calendar, Loader2, AlertCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-// ✅ Import your specific dialog
 import { RatingDialog } from '@/components/bookings/rating-dialog'
 
 export default function MyBookingsPage() {
@@ -17,7 +16,6 @@ export default function MyBookingsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>('')
 
-  // ✅ State to control your specific dialog props
   const [isRatingOpen, setIsRatingOpen] = useState(false)
   const [selectedBooking, setSelectedBooking] = useState<any>(null)
 
@@ -32,7 +30,10 @@ export default function MyBookingsPage() {
       }
 
       setUserId(user.id)
-      setUserName(user.user_metadata?.full_name || user.email?.split('@')[0] || 'Client')
+
+      // ✅ UPDATED: Improved name logic to avoid showing "telegram_..."
+      // First check metadata, then try to get the display name from the bookings table
+      const metaName = user.user_metadata?.full_name || user.user_metadata?.name
 
       const { data, error: bookingError } = await supabase
         .from('bookings')
@@ -41,7 +42,19 @@ export default function MyBookingsPage() {
         .order('date', { ascending: false })
 
       if (bookingError) throw bookingError
+      
       setBookings(data || [])
+
+      // Set the display name: 
+      // 1. Metadata 2. The 'name' field from their most recent booking 3. "Client"
+      if (metaName) {
+        setUserName(metaName)
+      } else if (data && data.length > 0 && data[0].name) {
+        setUserName(data[0].name)
+      } else {
+        setUserName('Client')
+      }
+
     } catch (err: any) {
       console.error('Fetch error:', err)
       setError(err.message || 'Failed to load bookings')
@@ -50,7 +63,6 @@ export default function MyBookingsPage() {
     }
   }
 
-  // ✅ Triggered by the Rate button in BookingsList
   const handleRate = (booking: any) => {
     setSelectedBooking(booking)
     setIsRatingOpen(true)
@@ -110,13 +122,12 @@ export default function MyBookingsPage() {
             />
           </div>
 
-          {/* ✅ Connects your RatingDialog to the state */}
           {selectedBooking && (
             <RatingDialog
               isOpen={isRatingOpen}
               onClose={() => {
                 setIsRatingOpen(false)
-                fetchBookings() // Refresh the list so the Rate button disappears
+                fetchBookings()
               }}
               bookingId={selectedBooking.id}
               serviceName={selectedBooking.service}
