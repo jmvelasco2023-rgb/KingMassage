@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Header } from '@/components/header'
@@ -8,14 +8,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { BookingsTable } from './bookings-table'
 import { ClientsList } from './clients-list'
 import type { Booking, User } from '@/lib/types'
-import { Calendar, Users, LayoutDashboard, Search, Filter, Download, Bell, DollarSign, Flame } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Calendar, Users, Search, Bell, DollarSign, Flame } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 
 interface AdminDashboardProps {
-  bookings: any[] // Using any here to allow for the joined 'users' object
+  bookings: any[] 
   users: User[]
 }
 
@@ -24,21 +24,10 @@ const formatPHP = (amount: number) => {
     style: 'currency',
     currency: 'PHP',
     minimumFractionDigits: 0
-  }).format(amount)
+  }).format(amount || 0)
 }
 
-const getCurrentMonthRange = () => {
-  const now = new Date()
-  const start = new Date(now.getFullYear(), now.getMonth(), 1)
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  return { 
-    start, 
-    end,
-    label: `${now.toLocaleDateString('en-PH', { month: 'long' })} ${now.getFullYear()}`
-  }
-}
-
-export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
+export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState('bookings')
   const [searchQuery, setSearchQuery] = useState('')
   const [bookingFilter, setBookingFilter] = useState('all')
@@ -47,187 +36,120 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
   const router = useRouter()
   const supabase = createClient()
 
-  // --- HELPER: TELEGRAM NOTIFIER (UPDATED) ---
-  const sendTelegramNotice = async (chatId: string | undefined, message: string) => {
-    if (!chatId) {
-      console.warn("⚠️ Notification Skipped: No Telegram ID found for this client.");
-      return;
-    }
+  // Sync local state if props update
+  useEffect(() => {
+    setLocalBookings(bookings)
+  }, [bookings])
 
+  const sendTelegramNotice = async (chatId: string | undefined, message: string) => {
+    if (!chatId || !process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN) return;
     try {
-      const response = await fetch(`https://api.telegram.org/bot${process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      await fetch(`https://api.telegram.org/bot${process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: message,
-          parse_mode: 'HTML' // Allows <b>Bold</b> and <i>Italic</i>
-        }),
+        body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'HTML' }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ Telegram API Error:', errorData);
-      } else {
-        console.log("✅ Telegram message sent to:", chatId);
-      }
     } catch (err) {
-      console.error('Network Error calling Telegram:', err);
+      console.error('Telegram Error:', err);
     }
   };
 
-  // --- HANDLERS (UPDATED WITH DATA SAFETY) ---
   async function handleApprove(id: string) {
     const booking = localBookings.find(b => b.id === id);
-    
-    // Safety check: Supabase joins can return an object OR an array [0]
     const userData = Array.isArray(booking?.users) ? booking.users[0] : booking?.users;
-    const chatId = userData?.telegram_id;
 
-    setLocalBookings(prev =>
-      prev.map(b => b.id === id ? { ...b, status: 'approved' } : b)
-    )
-    
+    setLocalBookings(prev => prev.map(b => b.id === id ? { ...b, status: 'approved' } : b))
     try {
       await supabase.from('bookings').update({ status: 'approved' }).eq('id', id)
-      
-      if (chatId) {
-        await sendTelegramNotice(
-          chatId, 
-          `<b>✅ BOOKING APPROVED</b>\n\nYour session for <b>${booking?.service}</b> has been approved! We look forward to seeing you at King's Massage.`
-        );
+      if (userData?.telegram_id) {
+        await sendTelegramNotice(userData.telegram_id, `<b>✅ APPROVED</b>\nYour ${booking?.service} session is confirmed!`);
       }
-    } catch (err) {
-      console.error('Approve failed:', err)
-    }
-    router.refresh()
-  }
-
-  async function handleReject(id: string) {
-    setLocalBookings(prev =>
-      prev.map(b => b.id === id ? { ...b, status: 'cancelled' } : b)
-    )
-    try {
-      await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', id)
-    } catch (err) {
-      console.error('Reject failed:', err)
-    }
-    router.refresh()
+      router.refresh()
+    } catch (err) { console.error(err) }
   }
 
   async function handleComplete(id: string, earnings: number, bookingData?: any) {
     const booking = localBookings.find(b => b.id === id)
     const userData = Array.isArray(booking?.users) ? booking.users[0] : booking?.users;
-    const chatId = userData?.telegram_id;
     
-    setLocalBookings(prev =>
-      prev.map(b => b.id === id ? { 
-        ...b, 
-        status: 'completed', 
-        earnings,
-        add_ons: bookingData?.add_ons || b.add_ons || [],
-        extra_minutes: bookingData?.extra_minutes || 0,
-        total_price: bookingData?.total_price || b.total_price
-      } : b)
-    )
-    
+    setLocalBookings(prev => prev.map(b => b.id === id ? { ...b, status: 'completed', earnings } : b))
     try {
-      await supabase.from('bookings').update({ 
-        status: 'completed', 
-        earnings,
-        add_ons: bookingData?.add_ons || booking?.add_ons || [],
-        extra_minutes: bookingData?.extra_minutes || 0,
-        total_price: bookingData?.total_price || booking?.total_price
-      }).eq('id', id)
-      
-      if (chatId) {
-        await sendTelegramNotice(
-          chatId, 
-          `<b>✨ SESSION COMPLETE</b>\n\nThank you for choosing King's Massage! Your session is now complete. We hope you enjoyed it! Please visit our website to leave a review.`
-        );
+      await supabase.from('bookings').update({ status: 'completed', earnings }).eq('id', id)
+      if (userData?.telegram_id) {
+        await sendTelegramNotice(userData.telegram_id, `<b>✨ COMPLETE</b>\nThank you for visiting King's Massage!`);
       }
-      
       router.refresh()
-    } catch (err) {
-      console.error('Complete failed:', err)
-    }
+    } catch (err) { console.error(err) }
   }
 
-  // Stats
-  const pendingCount = localBookings.filter((b) => b.status === 'pending').length
-  const approvedCount = localBookings.filter((b) => b.status === 'approved').length
-  const completedCount = localBookings.filter((b) => b.status === 'completed').length
-  const totalClients = users.length
-  
-  const { label: monthLabel, start: monthStart, end: monthEnd } = getCurrentMonthRange()
-  const monthlyEarnings = localBookings
-    .filter(b => b.status === 'completed' && new Date(b.created_at) >= monthStart && new Date(b.created_at) <= monthEnd)
-    .reduce((sum, b) => sum + (b.earnings || 0), 0)
-
-  // Filters
-  const filteredBookings = localBookings.filter(booking => {
-    const searchLower = searchQuery.toLowerCase().trim()
+  // --- REFINED SEARCH & FILTER LOGIC ---
+  const filteredBookings = (localBookings || []).filter(booking => {
+    const search = searchQuery.toLowerCase().trim()
     const userData = Array.isArray(booking.users) ? booking.users[0] : booking.users;
-    const telegramName = userData?.telegram_username?.toLowerCase() || ""
     
-    return searchLower === '' || 
-           booking.name.toLowerCase().includes(searchLower) ||
-           booking.service.toLowerCase().includes(searchLower) ||
-           userData?.email?.toLowerCase().includes(searchLower) ||
-           telegramName.includes(searchLower)
-  }).filter(booking => bookingFilter === 'all' || booking.status === bookingFilter)
+    const telegramName = userData?.telegram_username?.toLowerCase() || ""
+    const bookingName = booking.name?.toLowerCase() || ""
+    const email = userData?.email?.toLowerCase() || ""
 
-  const filteredUsers = users.filter(user => {
-    const searchLower = searchQuery.toLowerCase().trim()
-    return searchLower === '' || 
-           user.email.toLowerCase().includes(searchLower) ||
-           user.id.includes(searchLower)
+    const matchesSearch = search === '' || 
+           telegramName.includes(search) || 
+           bookingName.includes(search) || 
+           email.includes(search) ||
+           booking.service?.toLowerCase().includes(search);
+
+    const matchesFilter = bookingFilter === 'all' || booking.status === bookingFilter;
+    
+    return matchesSearch && matchesFilter;
+  })
+
+  const filteredUsers = (users || []).filter(user => {
+    const search = searchQuery.toLowerCase().trim()
+    return search === '' || 
+           user.telegram_username?.toLowerCase().includes(search) || 
+           user.email?.toLowerCase().includes(search);
   })
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50/30">
+    <div className="min-h-screen flex flex-col bg-slate-50/50">
       <Header />
       
       <main className="flex-1 py-8 px-4">
         <div className="container mx-auto max-w-6xl">
-          {/* Stats Section */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <StatCard label="Pending" value={pendingCount} icon={<Bell className="w-5 h-5 text-amber-600" />} color="bg-amber-100" />
-            <StatCard label="Approved" value={approvedCount} icon={<Calendar className="w-5 h-5 text-emerald-600" />} color="bg-emerald-100" />
-            <StatCard label="Completed" value={completedCount} icon={<Flame className="w-5 h-5 text-blue-600" />} color="bg-blue-100" />
-            <StatCard label={monthLabel} value={formatPHP(monthlyEarnings)} icon={<DollarSign className="w-5 h-5 text-green-600" />} color="bg-green-100" />
+          {/* Stats Header */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <StatCard label="Pending" value={localBookings.filter(b => b.status === 'pending').length} icon={<Bell className="w-4 h-4" />} color="text-amber-600 bg-amber-100" />
+            <StatCard label="Approved" value={localBookings.filter(b => b.status === 'approved').length} icon={<Calendar className="w-4 h-4" />} color="text-emerald-600 bg-emerald-100" />
+            <StatCard label="Completed" value={localBookings.filter(b => b.status === 'completed').length} icon={<Flame className="w-4 h-4" />} color="text-blue-600 bg-blue-100" />
+            <StatCard label="Earnings" value={formatPHP(localBookings.reduce((s, b) => s + (b.earnings || 0), 0))} icon={<DollarSign className="w-4 h-4" />} color="text-green-600 bg-green-100" />
           </div>
 
-          <Tabs defaultValue="bookings" value={activeTab} onValueChange={setActiveTab} className="mb-8">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-              <TabsList className="bg-white border border-slate-200 p-1 rounded-xl">
-                <TabsTrigger value="bookings" className="rounded-lg px-6">Bookings</TabsTrigger>
-                <TabsTrigger value="clients" className="rounded-lg px-6">Clients</TabsTrigger>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+              <TabsList className="bg-white border p-1 rounded-xl shadow-sm">
+                <TabsTrigger value="bookings" className="px-8 rounded-lg font-bold">Bookings</TabsTrigger>
+                <TabsTrigger value="clients" className="px-8 rounded-lg font-bold">Clients</TabsTrigger>
               </TabsList>
 
-              <div className="relative w-full md:w-64">
+              <div className="relative w-full md:w-80">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input 
-                  placeholder="Search name or service..." 
+                  placeholder="Search identity or service..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 rounded-xl border-slate-200 focus:ring-emerald-500"
+                  className="pl-10 rounded-xl bg-white border-slate-200 focus:ring-emerald-500"
                 />
               </div>
             </div>
 
-            <TabsContent value="bookings" className="space-y-4 focus-visible:outline-none">
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            <TabsContent value="bookings" className="space-y-4 outline-none">
+              <div className="flex gap-2 pb-2 overflow-x-auto scrollbar-hide">
                 {['all', 'pending', 'approved', 'completed'].map((f) => (
                   <Button 
                     key={f}
                     variant={bookingFilter === f ? "default" : "outline"} 
                     size="sm" 
                     onClick={() => setBookingFilter(f)}
-                    className={cn(
-                      "rounded-full px-5 font-bold capitalize",
-                      bookingFilter === f && "bg-slate-900 text-white"
-                    )}
+                    className={cn("rounded-full px-5 font-bold capitalize transition-all", bookingFilter === f ? "bg-slate-900 text-white shadow-md" : "bg-white")}
                   >
                     {f}
                   </Button>
@@ -236,12 +158,12 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
               <BookingsTable
                 bookings={filteredBookings}
                 onApprove={handleApprove}
-                onReject={handleReject}
+                onReject={() => {}} 
                 onComplete={handleComplete}
               />
             </TabsContent>
 
-            <TabsContent value="clients" className="focus-visible:outline-none">
+            <TabsContent value="clients" className="outline-none">
               <ClientsList users={filteredUsers} bookings={localBookings} />
             </TabsContent>
           </Tabs>
@@ -251,19 +173,15 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
   )
 }
 
-function StatCard({ label, value, icon, color }: { label: string, value: string | number, icon: React.ReactNode, color: string }) {
+function StatCard({ label, value, icon, color }: any) {
   return (
-    <Card className="bg-white border-none shadow-sm ring-1 ring-slate-200/60 rounded-2xl">
-      <CardContent className="p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{value}</p>
-          </div>
-          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", color)}>
-            {icon}
-          </div>
+    <Card className="border-none shadow-sm rounded-2xl bg-white ring-1 ring-slate-100">
+      <CardContent className="p-4 flex items-center justify-between">
+        <div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">{label}</p>
+          <p className="text-xl font-bold text-slate-900 mt-1">{value}</p>
         </div>
+        <div className={cn("p-2.5 rounded-xl shadow-inner", color)}>{icon}</div>
       </CardContent>
     </Card>
   )
