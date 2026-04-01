@@ -43,7 +43,7 @@ export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProp
     }
   }
 
-  // ✅ UPDATED: Now saves all session modifications
+  // ✅ UPDATED: Separates Client Booking data from Admin Session Upsells
   async function handleComplete(id: string, finalEarnings: number, bookingData?: any) {
     try {
       const { error } = await supabase
@@ -52,8 +52,10 @@ export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProp
           status: 'completed',
           earnings: finalEarnings,
           total_price: bookingData?.total_price || finalEarnings,
-          extra_minutes: bookingData?.extra_minutes || 0,
-          add_ons: bookingData?.add_ons || [],
+          // We do NOT update 'extra_minutes' or 'add_ons' here to preserve original client choices
+          // Instead, we update the specific session columns for admin additions:
+          session_extra_minutes: bookingData?.session_mods_minutes || 0,
+          session_add_ons: bookingData?.session_added_services || [],
           updated_at: new Date().toISOString()
         })
         .eq('id', id)
