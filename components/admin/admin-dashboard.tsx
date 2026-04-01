@@ -15,14 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 
 interface AdminDashboardProps {
-  // Updated type to include telegram info from the joined users table
-  bookings: (Booking & { 
-    users: { 
-      email: string, 
-      telegram_id?: string, 
-      telegram_username?: string 
-    } 
-  })[]
+  bookings: any[] // Using any here to allow for the joined 'users' object
   users: User[]
 }
 
@@ -54,31 +47,43 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
   const router = useRouter()
   const supabase = createClient()
 
-  // --- HELPER: TELEGRAM NOTIFIER ---
+  // --- HELPER: TELEGRAM NOTIFIER (UPDATED) ---
   const sendTelegramNotice = async (chatId: string | undefined, message: string) => {
     if (!chatId) {
-      console.warn("Skipping notification: No Telegram ID found for this user.");
+      console.warn("⚠️ Notification Skipped: No Telegram ID found for this client.");
       return;
     }
+
     try {
-      await fetch(`https://api.telegram.org/bot${process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      const response = await fetch(`https://api.telegram.org/bot${process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: chatId,
           text: message,
+          parse_mode: 'HTML' // Allows <b>Bold</b> and <i>Italic</i>
         }),
       });
-      console.log("Telegram notification sent successfully");
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Telegram API Error:', errorData);
+      } else {
+        console.log("✅ Telegram message sent to:", chatId);
+      }
     } catch (err) {
-      console.error('Telegram Notification Error:', err);
+      console.error('Network Error calling Telegram:', err);
     }
   };
 
-  // --- HANDLERS ---
+  // --- HANDLERS (UPDATED WITH DATA SAFETY) ---
   async function handleApprove(id: string) {
-    const bookingToApprove = localBookings.find(b => b.id === id);
+    const booking = localBookings.find(b => b.id === id);
     
+    // Safety check: Supabase joins can return an object OR an array [0]
+    const userData = Array.isArray(booking?.users) ? booking.users[0] : booking?.users;
+    const chatId = userData?.telegram_id;
+
     setLocalBookings(prev =>
       prev.map(b => b.id === id ? { ...b, status: 'approved' } : b)
     )
@@ -86,11 +91,10 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
     try {
       await supabase.from('bookings').update({ status: 'approved' }).eq('id', id)
       
-      // Notify Client
-      if (bookingToApprove?.users?.telegram_id) {
+      if (chatId) {
         await sendTelegramNotice(
-          bookingToApprove.users.telegram_id, 
-          `✅ Your booking for ${bookingToApprove.service} has been APPROVED! See you soon at King's Massage.`
+          chatId, 
+          `<b>✅ BOOKING APPROVED</b>\n\nYour session for <b>${booking?.service}</b> has been approved! We look forward to seeing you at King's Massage.`
         );
       }
     } catch (err) {
@@ -112,7 +116,9 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
   }
 
   async function handleComplete(id: string, earnings: number, bookingData?: any) {
-    const bookingToUpdate = localBookings.find(b => b.id === id)
+    const booking = localBookings.find(b => b.id === id)
+    const userData = Array.isArray(booking?.users) ? booking.users[0] : booking?.users;
+    const chatId = userData?.telegram_id;
     
     setLocalBookings(prev =>
       prev.map(b => b.id === id ? { 
@@ -129,16 +135,15 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
       await supabase.from('bookings').update({ 
         status: 'completed', 
         earnings,
-        add_ons: bookingData?.add_ons || bookingToUpdate?.add_ons || [],
+        add_ons: bookingData?.add_ons || booking?.add_ons || [],
         extra_minutes: bookingData?.extra_minutes || 0,
-        total_price: bookingData?.total_price || bookingToUpdate?.total_price
+        total_price: bookingData?.total_price || booking?.total_price
       }).eq('id', id)
       
-      // Notify Client
-      if (bookingToUpdate?.users?.telegram_id) {
+      if (chatId) {
         await sendTelegramNotice(
-          bookingToUpdate.users.telegram_id, 
-          `✨ Your session at King's Massage is complete. Thank you for choosing us! Please visit the website to leave a review.`
+          chatId, 
+          `<b>✨ SESSION COMPLETE</b>\n\nThank you for choosing King's Massage! Your session is now complete. We hope you enjoyed it! Please visit our website to leave a review.`
         );
       }
       
@@ -159,15 +164,16 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
     .filter(b => b.status === 'completed' && new Date(b.created_at) >= monthStart && new Date(b.created_at) <= monthEnd)
     .reduce((sum, b) => sum + (b.earnings || 0), 0)
 
-  // Filters with improved name logic
+  // Filters
   const filteredBookings = localBookings.filter(booking => {
     const searchLower = searchQuery.toLowerCase().trim()
-    const telegramName = booking.users?.telegram_username?.toLowerCase() || ""
+    const userData = Array.isArray(booking.users) ? booking.users[0] : booking.users;
+    const telegramName = userData?.telegram_username?.toLowerCase() || ""
     
     return searchLower === '' || 
            booking.name.toLowerCase().includes(searchLower) ||
            booking.service.toLowerCase().includes(searchLower) ||
-           booking.users.email.toLowerCase().includes(searchLower) ||
+           userData?.email?.toLowerCase().includes(searchLower) ||
            telegramName.includes(searchLower)
   }).filter(booking => bookingFilter === 'all' || booking.status === bookingFilter)
 
@@ -178,104 +184,54 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
            user.id.includes(searchLower)
   })
 
-  const handleFilterClick = (filter: string) => {
-    setBookingFilter(filter)
-  }
-
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-slate-50/30">
       <Header />
       
       <main className="flex-1 py-8 px-4">
         <div className="container mx-auto max-w-6xl">
-          {/* Dashboard Stats Header */}
+          {/* Stats Section */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <Card className="bg-white shadow-sm ring-1 ring-slate-100 rounded-2xl">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pending</p>
-                    <p className="text-2xl font-bold text-slate-900 mt-1">{pendingCount}</p>
-                  </div>
-                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
-                    <Bell className="w-5 h-5 text-amber-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white shadow-sm ring-1 ring-slate-100 rounded-2xl">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Approved</p>
-                    <p className="text-2xl font-bold text-slate-900 mt-1">{approvedCount}</p>
-                  </div>
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                    <Calendar className="w-5 h-5 text-emerald-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white shadow-sm ring-1 ring-slate-100 rounded-2xl">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Completed</p>
-                    <p className="text-2xl font-bold text-slate-900 mt-1">{completedCount}</p>
-                  </div>
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                    <Flame className="w-5 h-5 text-blue-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white shadow-sm ring-1 ring-slate-100 rounded-2xl">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{monthLabel}</p>
-                    <p className="text-xl font-bold text-slate-900 mt-1">{formatPHP(monthlyEarnings)}</p>
-                  </div>
-                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                    <DollarSign className="w-5 h-5 text-green-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <StatCard label="Pending" value={pendingCount} icon={<Bell className="w-5 h-5 text-amber-600" />} color="bg-amber-100" />
+            <StatCard label="Approved" value={approvedCount} icon={<Calendar className="w-5 h-5 text-emerald-600" />} color="bg-emerald-100" />
+            <StatCard label="Completed" value={completedCount} icon={<Flame className="w-5 h-5 text-blue-600" />} color="bg-blue-100" />
+            <StatCard label={monthLabel} value={formatPHP(monthlyEarnings)} icon={<DollarSign className="w-5 h-5 text-green-600" />} color="bg-green-100" />
           </div>
 
           <Tabs defaultValue="bookings" value={activeTab} onValueChange={setActiveTab} className="mb-8">
-            <TabsList className="grid w-full md:w-auto grid-cols-2 mb-6">
-              <TabsTrigger value="bookings" className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                Bookings
-                {pendingCount > 0 && (
-                  <Badge className="ml-2 bg-amber-100 text-amber-700">
-                    {pendingCount}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="clients" className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Clients
-                <Badge className="ml-2 bg-blue-100 text-blue-700">
-                  {totalClients}
-                </Badge>
-              </TabsTrigger>
-            </TabsList>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+              <TabsList className="bg-white border border-slate-200 p-1 rounded-xl">
+                <TabsTrigger value="bookings" className="rounded-lg px-6">Bookings</TabsTrigger>
+                <TabsTrigger value="clients" className="rounded-lg px-6">Clients</TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="bookings" className="space-y-4">
-              <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
-                <h3 className="text-lg font-semibold">Bookings {bookingFilter !== 'all' ? `(${bookingFilter})` : ''}</h3>
-                <div className="flex gap-2 flex-wrap">
-                  <Button variant="outline" size="sm" onClick={() => handleFilterClick('all')} className={bookingFilter === 'all' ? 'bg-slate-100' : ''}>All</Button>
-                  <Button variant="outline" size="sm" onClick={() => handleFilterClick('pending')} className={bookingFilter === 'pending' ? 'bg-amber-100' : ''}>Pending</Button>
-                  <Button variant="outline" size="sm" onClick={() => handleFilterClick('approved')} className={bookingFilter === 'approved' ? 'bg-emerald-100' : ''}>Approved</Button>
-                  <Button variant="outline" size="sm" onClick={() => handleFilterClick('completed')} className={bookingFilter === 'completed' ? 'bg-blue-100' : ''}>Completed</Button>
-                </div>
+              <div className="relative w-full md:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input 
+                  placeholder="Search name or service..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 rounded-xl border-slate-200 focus:ring-emerald-500"
+                />
+              </div>
+            </div>
+
+            <TabsContent value="bookings" className="space-y-4 focus-visible:outline-none">
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                {['all', 'pending', 'approved', 'completed'].map((f) => (
+                  <Button 
+                    key={f}
+                    variant={bookingFilter === f ? "default" : "outline"} 
+                    size="sm" 
+                    onClick={() => setBookingFilter(f)}
+                    className={cn(
+                      "rounded-full px-5 font-bold capitalize",
+                      bookingFilter === f && "bg-slate-900 text-white"
+                    )}
+                  >
+                    {f}
+                  </Button>
+                ))}
               </div>
               <BookingsTable
                 bookings={filteredBookings}
@@ -285,13 +241,30 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
               />
             </TabsContent>
 
-            <TabsContent value="clients">
-              <h3 className="text-lg font-semibold mb-4">Registered Clients ({totalClients})</h3>
+            <TabsContent value="clients" className="focus-visible:outline-none">
               <ClientsList users={filteredUsers} bookings={localBookings} />
             </TabsContent>
           </Tabs>
         </div>
       </main>
     </div>
+  )
+}
+
+function StatCard({ label, value, icon, color }: { label: string, value: string | number, icon: React.ReactNode, color: string }) {
+  return (
+    <Card className="bg-white border-none shadow-sm ring-1 ring-slate-200/60 rounded-2xl">
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+            <p className="text-2xl font-bold text-slate-900 mt-1">{value}</p>
+          </div>
+          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", color)}>
+            {icon}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
