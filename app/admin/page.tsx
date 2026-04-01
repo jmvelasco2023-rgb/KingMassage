@@ -28,35 +28,24 @@ export default async function AdminPage() {
     redirect('/')
   }
 
-  // 3. Fetch Bookings with UPDATED column names from your database
+  /**
+   * 3. Fetch Bookings with JOINED User Data
+   * We pull the telegram_id and telegram_username from the 'users' table 
+   * so the AdminDashboard can send Telegram notifications.
+   */
   const { data: bookings, error: bookingError } = await supabase
     .from('bookings')
     .select(`
-      id,
-      user_id,
-      name,
-      mobile,
-      location,
-      service,
-      date,
-      time,
-      duration,
-      extra_minutes,
-      status,
-      payment_proof_url,
-      created_at,
-      pressure_preference,
-      focus_area,
-      additional_needs,
-      special_requests,
-      add_ons,
-      total_price,
-      earnings
+      *,
+      users (
+        email,
+        telegram_id,
+        telegram_username
+      )
     `)
     .order('created_at', { ascending: false })
 
   if (bookingError) {
-    // This will help you see if there are still column mismatches in your terminal
     console.error('❌ Database Fetch Error:', bookingError.message)
   }
 
@@ -71,7 +60,7 @@ export default async function AdminPage() {
     <main className="min-h-screen bg-slate-50/50">
       <Suspense fallback={<AdminLoading />}>
         <AdminDashboard 
-          bookings={bookings || []} 
+          bookings={(bookings as any) || []} 
           users={users || []} 
         />
       </Suspense>
