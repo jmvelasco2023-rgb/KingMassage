@@ -43,7 +43,7 @@ export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProp
     }
   }
 
-  // ✅ UPDATED: Separates Client Booking data from Admin Session Upsells
+  // ✅ UPDATED: Fixed to match your exact Supabase column names
   async function handleComplete(id: string, finalEarnings: number, bookingData?: any) {
     try {
       const { error } = await supabase
@@ -52,10 +52,11 @@ export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProp
           status: 'completed',
           earnings: finalEarnings,
           total_price: bookingData?.total_price || finalEarnings,
-          // We do NOT update 'extra_minutes' or 'add_ons' here to preserve original client choices
-          // Instead, we update the specific session columns for admin additions:
-          session_extra_minutes: bookingData?.session_mods_minutes || 0,
-          session_add_ons: bookingData?.session_added_services || [],
+          
+          // These now match your Supabase schema exactly:
+          session_extra_minutes: bookingData?.session_extra_minutes || 0,
+          session_add_ons: bookingData?.session_add_ons || [],
+          
           updated_at: new Date().toISOString()
         })
         .eq('id', id)
