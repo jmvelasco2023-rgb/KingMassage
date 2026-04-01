@@ -37,7 +37,12 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
         
         const calculatedTotal = useMemo(() => {
           const startingPrice = booking.total_price || 600
-          const adminMinutesCost = (mods.extra_minutes / 15) * 150
+          // Logic for extra time pricing: 15=150, 30=250, 45=350
+          let adminMinutesCost = 0;
+          if (mods.extra_minutes === 15) adminMinutesCost = 150;
+          else if (mods.extra_minutes === 30) adminMinutesCost = 250;
+          else if (mods.extra_minutes === 45) adminMinutesCost = 350;
+          
           const adminAddOnsCost = (mods.added_ons?.length || 0) * 150
           return startingPrice + adminMinutesCost + adminAddOnsCost
         }, [booking.total_price, mods.extra_minutes, mods.added_ons])
@@ -111,8 +116,8 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                       <span className="font-bold">{baseDuration}m</span>
                     </div>
                     {(booking.extra_minutes || 0) > 0 && (
-                      <div className="flex justify-between text-emerald-700">
-                        <span>Original Extra:</span>
+                      <div className="flex justify-between text-slate-500">
+                        <span>Client Extra Time:</span>
                         <span className="font-bold">+{booking.extra_minutes}m</span>
                       </div>
                     )}
@@ -146,7 +151,7 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
 
                       {mods.added_ons.length > 0 && (
                         <div className="border-t border-emerald-200 pt-2">
-                          <p className="text-[10px] font-bold text-emerald-600 mb-2">✨ Adding During Session:</p>
+                          <p className="text-[10px] font-bold text-emerald-600 mb-2">✨ Upsold During Session:</p>
                           {mods.added_ons.map((addon: any, idx: number) => (
                             <div key={idx} className="flex justify-between items-center text-sm mb-1">
                               <span className="text-emerald-700 font-medium">{addon.name}</span>
@@ -168,7 +173,6 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                       <p className="text-sm font-bold text-blue-900">Add to This Session</p>
                     </div>
 
-                    {/* ✅ FIXED: Use grid-cols-2 for better dropdown spacing */}
                     <div className="grid grid-cols-2 gap-2">
                       <select 
                         className="w-full bg-white rounded-lg px-3 py-2.5 text-xs font-bold text-slate-700 border border-blue-200 outline-none"
@@ -245,7 +249,9 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                     {mods.extra_minutes > 0 && (
                       <div className="flex justify-between text-emerald-700">
                         <span>+ Extra Time (+{mods.extra_minutes}m):</span>
-                        <span className="font-bold">₱{(mods.extra_minutes / 15) * 150}</span>
+                        <span className="font-bold">
+                          ₱{mods.extra_minutes === 15 ? 150 : mods.extra_minutes === 30 ? 250 : 350}
+                        </span>
                       </div>
                     )}
 
@@ -286,12 +292,10 @@ export function BookingsTable({ bookings, onApprove, onReject, onComplete }: Boo
                     <Button
                       className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                       onClick={() => {
-                        // ✅ FIXED: Map objects to names before sending to DB
-                        const sessionAddOns = mods.added_ons.map((a: any) => a.name);
+                        // ✅ UPDATED: Maps admin upsells to your Supabase columns
                         onComplete(booking.id, calculatedTotal, {
-                          status: 'completed',
-                          add_ons: [...(booking.add_ons || []), ...sessionAddOns],
-                          extra_minutes: (booking.extra_minutes || 0) + mods.extra_minutes,
+                          session_extra_minutes: mods.extra_minutes,
+                          session_add_ons: mods.added_ons.map((a: any) => a.name),
                           total_price: calculatedTotal
                         });
                       }}
