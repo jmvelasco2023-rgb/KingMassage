@@ -1,21 +1,19 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Header } from '@/components/header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { BookingsTable } from './bookings-table'
 import { ClientsList } from './clients-list'
-import type { User } from '@/lib/types'
-import { Calendar, Search, Bell, DollarSign, Flame } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
+import type { Booking, User } from '@/lib/types'
+import { Calendar, Users, LayoutDashboard, DollarSign, Flame } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 
 interface AdminDashboardProps {
-  bookings: any[] 
+  bookings: any[]
   users: User[]
 }
 
@@ -24,128 +22,176 @@ const formatPHP = (amount: number) => {
     style: 'currency',
     currency: 'PHP',
     minimumFractionDigits: 0
-  }).format(amount || 0)
+  }).format(amount)
 }
 
 export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState('bookings')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [bookingFilter, setBookingFilter] = useState('all')
-  const [localBookings, setLocalBookings] = useState(bookings)
-
   const router = useRouter()
   const supabase = createClient()
-
-  useEffect(() => {
-    setLocalBookings(bookings)
-  }, [bookings])
+  const [activeTab, setActiveTab] = useState('bookings')
 
   const sendTelegramNotice = async (chatId: string | undefined, message: string) => {
-    if (!chatId || !process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN) return;
+    if (!chatId) return
     try {
-      await fetch(`https://api.telegram.org/bot${process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      await fetch('/api/notify-telegram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'HTML' }),
-      });
-    } catch (err) {
-      console.error('Telegram Error:', err);
+        body: JSON.stringify({ telegramId: chatId, message })
+      })
+    } catch (error) {
+      console.error('Telegram notification error:', error)
     }
-  };
-
-  async function handleApprove(id: string) {
-    const booking = localBookings.find(b => b.id === id);
-    const userData = Array.isArray(booking?.users) ? booking.users[0] : booking?.users;
-
-    setLocalBookings(prev => prev.map(b => b.id === id ? { ...b, status: 'approved' } : b))
-    try {
-      await supabase.from('bookings').update({ status: 'approved' }).eq('id', id)
-      if (userData?.telegram_id) {
-        await sendTelegramNotice(userData.telegram_id, `<b>✅ APPROVED</b>\nYour ${booking?.service} session is confirmed!`);
-      }
-      router.refresh()
-    } catch (err) { console.error(err) }
   }
 
   // ✅ UPDATED: Now saves all session modifications
   async function handleComplete(id: string, finalEarnings: number, bookingData?: any) {
-    const booking = localBookings.find(b => b.id === id)
-    const userData = Array.isArray(booking?.users) ? booking.users[0] : booking?.users;
-    
-    setLocalBookings(prev => prev.map(b => b.id === id ? { 
-      ...b, 
-      status: 'completed', 
-      earnings: finalEarnings,
-      total_price: bookingData?.total_price || b.total_price,
-      add_ons: bookingData?.add_ons || b.add_ons,
-      extra_minutes: bookingData?.extra_minutes || b.extra_minutes
-    } : b))
-
     try {
-      const { error } = await supabase.from('bookings').update({ 
-        status: 'completed', 
-        earnings: finalEarnings,
-        total_price: bookingData?.total_price || booking?.total_price,
-        add_ons: bookingData?.add_ons || booking?.add_ons,
-        extra_minutes: bookingData?.extra_minutes || booking?.extra_minutes,
-        reviewed_at: new Date().toISOString()
-      }).eq('id', id)
+      const { error } = await supabase
+        .from('bookings')
+        .update({
+          status: 'completed',
+          earnings: finalEarnings,
+          total_price: bookingData?.total_price || finalEarnings,
+          extra_minutes: bookingData?.extra_minutes || 0,
+          add_ons: bookingData?.add_ons || [],
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
 
-      if (error) throw error;
+      if (error) throw error
 
-      if (userData?.telegram_id) {
-        await sendTelegramNotice(userData.telegram_id, `<b>✨ SESSION COMPLETE</b>\nTotal: ₱${finalEarnings}\nThank you for visiting King's Massage!`);
+      const booking = bookings.find(b => b.id === id)
+      if (booking) {
+        await sendTelegramNotice(
+          booking.user_id,
+          `✅ Session Completed!\n\nYour massage session has been completed.\nFinal Amount: ₱${finalEarnings}\n\nThank you for choosing King's Massage! 🙏`
+        )
       }
+
       router.refresh()
-    } catch (err) {
-      console.error('Complete failed:', err)
+    } catch (error) {
+      console.error('Error completing booking:', error)
+      alert('Failed to complete booking')
     }
   }
 
-  const filteredBookings = (localBookings || []).filter(booking => {
-    const search = searchQuery.toLowerCase().trim()
-    const userData = Array.isArray(booking.users) ? booking.users[0] : booking.users;
-    const telegramName = userData?.telegram_username?.toLowerCase() || ""
-    const bookingName = booking.name?.toLowerCase() || ""
-    const email = userData?.email?.toLowerCase() || ""
+  async function handleApprove(id: string) {
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ status: 'approved' })
+        .eq('id', id)
 
-    return (search === '' || telegramName.includes(search) || bookingName.includes(search) || email.includes(search) || booking.service?.toLowerCase().includes(search)) 
-           && (bookingFilter === 'all' || booking.status === bookingFilter);
-  })
+      if (error) throw error
+
+      const booking = bookings.find(b => b.id === id)
+      if (booking) {
+        await sendTelegramNotice(
+          booking.user_id,
+          `✅ Your booking has been approved!\n\nService: ${booking.service}\nDate: ${booking.date}\nTime: ${booking.time}\n\nPlease send payment proof. Thank you! 🙏`
+        )
+      }
+
+      router.refresh()
+    } catch (error) {
+      console.error('Error approving booking:', error)
+      alert('Failed to approve booking')
+    }
+  }
+
+  async function handleReject(id: string) {
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ status: 'rejected' })
+        .eq('id', id)
+
+      if (error) throw error
+
+      const booking = bookings.find(b => b.id === id)
+      if (booking) {
+        await sendTelegramNotice(
+          booking.user_id,
+          `❌ Your booking request has been declined.\n\nPlease try booking another time. If you have questions, feel free to message us. 💬`
+        )
+      }
+
+      router.refresh()
+    } catch (error) {
+      console.error('Error rejecting booking:', error)
+      alert('Failed to reject booking')
+    }
+  }
+
+  // Calculate stats
+  const pendingCount = bookings.filter(b => b.status === 'pending').length
+  const approvedCount = bookings.filter(b => b.status === 'approved').length
+  const completedCount = bookings.filter(b => b.status === 'completed').length
+  const totalEarnings = bookings
+    .filter(b => b.status === 'completed')
+    .reduce((sum, b) => sum + (b.earnings || b.total_price || 0), 0)
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50/50">
+    <div className="min-h-screen bg-slate-50/50">
       <Header />
-      <main className="flex-1 py-8 px-4">
+
+      <main className="py-8 px-4">
         <div className="container mx-auto max-w-6xl">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <StatCard label="Pending" value={localBookings.filter(b => b.status === 'pending').length} icon={<Bell className="w-4 h-4" />} color="text-amber-600 bg-amber-100" />
-            <StatCard label="Approved" value={localBookings.filter(b => b.status === 'approved').length} icon={<Calendar className="w-4 h-4" />} color="text-emerald-600 bg-emerald-100" />
-            <StatCard label="Completed" value={localBookings.filter(b => b.status === 'completed').length} icon={<Flame className="w-4 h-4" />} color="text-blue-600 bg-blue-100" />
-            <StatCard label="Earnings" value={formatPHP(localBookings.reduce((s, b) => s + (b.earnings || 0), 0))} icon={<DollarSign className="w-4 h-4" />} color="text-green-600 bg-green-100" />
+          {/* Page Header */}
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3 mb-2">
+              <LayoutDashboard className="w-8 h-8 text-emerald-600" />
+              Admin Dashboard
+            </h1>
+            <p className="text-slate-600">Manage bookings and clients</p>
           </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-              <TabsList className="bg-white border p-1 rounded-xl shadow-sm">
-                <TabsTrigger value="bookings" className="px-8 rounded-lg font-bold">Bookings</TabsTrigger>
-                <TabsTrigger value="clients" className="px-8 rounded-lg font-bold">Clients</TabsTrigger>
-              </TabsList>
-              <div className="relative w-full md:w-80">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 rounded-xl bg-white border-slate-200 focus:ring-emerald-500" />
-              </div>
-            </div>
-            <TabsContent value="bookings" className="space-y-4 outline-none">
-              <div className="flex gap-2 pb-2 overflow-x-auto scrollbar-hide">
-                {['all', 'pending', 'approved', 'completed'].map((f) => (
-                  <Button key={f} variant={bookingFilter === f ? "default" : "outline"} size="sm" onClick={() => setBookingFilter(f)} className={cn("rounded-full px-5 font-bold capitalize", bookingFilter === f ? "bg-slate-900 text-white shadow-md" : "bg-white")}>{f}</Button>
-                ))}
-              </div>
-              <BookingsTable bookings={filteredBookings} onApprove={handleApprove} onReject={() => {}} onComplete={handleComplete} />
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <StatCard
+              label="Pending"
+              value={pendingCount}
+              icon={Calendar}
+              color="amber"
+            />
+            <StatCard
+              label="Approved"
+              value={approvedCount}
+              icon={Calendar}
+              color="emerald"
+            />
+            <StatCard
+              label="Completed"
+              value={completedCount}
+              icon={Flame}
+              color="blue"
+            />
+            <StatCard
+              label="Earnings"
+              value={formatPHP(totalEarnings)}
+              icon={DollarSign}
+              color="green"
+            />
+          </div>
+
+          {/* Tabs */}
+          <Tabs defaultValue="bookings" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-2 bg-white border border-slate-200 rounded-xl p-1">
+              <TabsTrigger value="bookings">Bookings</TabsTrigger>
+              <TabsTrigger value="clients">Clients</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="bookings" className="space-y-4">
+              <BookingsTable
+                bookings={bookings}
+                onApprove={handleApprove}
+                onReject={handleReject}
+                onComplete={handleComplete}
+              />
             </TabsContent>
-            <TabsContent value="clients" className="outline-none">
-              <ClientsList users={users} bookings={localBookings} />
+
+            <TabsContent value="clients">
+              <ClientsList users={users} bookings={bookings} />
             </TabsContent>
           </Tabs>
         </div>
@@ -154,15 +200,24 @@ export function AdminDashboard({ bookings = [], users = [] }: AdminDashboardProp
   )
 }
 
-function StatCard({ label, value, icon, color }: any) {
+function StatCard({ label, value, icon: Icon, color }: any) {
+  const colorClasses = {
+    amber: 'bg-amber-50 text-amber-700',
+    emerald: 'bg-emerald-50 text-emerald-700',
+    blue: 'bg-blue-50 text-blue-700',
+    green: 'bg-green-50 text-green-700',
+  }
+
   return (
-    <Card className="border-none shadow-sm rounded-2xl bg-white ring-1 ring-slate-100">
-      <CardContent className="p-4 flex items-center justify-between">
-        <div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
-          <p className="text-xl font-bold text-slate-900 mt-1">{value}</p>
+    <Card className="border-none shadow-sm">
+      <CardContent className={`p-4 ${colorClasses[color as keyof typeof colorClasses] || colorClasses.emerald}`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase opacity-70">{label}</p>
+            <p className="text-2xl font-bold mt-1">{value}</p>
+          </div>
+          <Icon className="w-8 h-8 opacity-50" />
         </div>
-        <div className={cn("p-2.5 rounded-xl", color)}>{icon}</div>
       </CardContent>
     </Card>
   )
