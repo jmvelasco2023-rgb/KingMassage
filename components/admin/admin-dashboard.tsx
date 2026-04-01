@@ -15,11 +15,17 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 
 interface AdminDashboardProps {
-  bookings: (Booking & { users: { email: string } })[]
+  // Updated type to include telegram info from the joined users table
+  bookings: (Booking & { 
+    users: { 
+      email: string, 
+      telegram_id?: string, 
+      telegram_username?: string 
+    } 
+  })[]
   users: User[]
 }
 
-// Format Philippine Pesos currency
 const formatPHP = (amount: number) => {
   return new Intl.NumberFormat('en-PH', {
     style: 'currency',
@@ -28,7 +34,6 @@ const formatPHP = (amount: number) => {
   }).format(amount)
 }
 
-// Get current month for earnings calculation
 const getCurrentMonthRange = () => {
   const now = new Date()
   const start = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -44,19 +49,50 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState('bookings')
   const [searchQuery, setSearchQuery] = useState('')
   const [bookingFilter, setBookingFilter] = useState('all')
-
   const [localBookings, setLocalBookings] = useState(bookings)
 
   const router = useRouter()
   const supabase = createClient()
 
-  // 🔑 Optimistic Handlers
+  // --- HELPER: TELEGRAM NOTIFIER ---
+  const sendTelegramNotice = async (chatId: string | undefined, message: string) => {
+    if (!chatId) {
+      console.warn("Skipping notification: No Telegram ID found for this user.");
+      return;
+    }
+    try {
+      await fetch(`https://api.telegram.org/bot${process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: message,
+        }),
+      });
+      console.log("Telegram notification sent successfully");
+    } catch (err) {
+      console.error('Telegram Notification Error:', err);
+    }
+  };
+
+  // --- HANDLERS ---
   async function handleApprove(id: string) {
+    const bookingToApprove = localBookings.find(b => b.id === id);
+    
     setLocalBookings(prev =>
       prev.map(b => b.id === id ? { ...b, status: 'approved' } : b)
     )
+    
     try {
       await supabase.from('bookings').update({ status: 'approved' }).eq('id', id)
+      
+      // Notify Client
+      if (bookingToApprove?.users?.telegram_id) {
+        await sendTelegramNotice(
+          bookingToApprove.users.telegram_id, 
+          `✅ Your booking for ${bookingToApprove.service} has been APPROVED! See you soon at King's Massage.`
+        );
+      }
     } catch (err) {
       console.error('Approve failed:', err)
     }
@@ -75,7 +111,6 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
     router.refresh()
   }
 
-  // ✅ FIXED: Save to extra_minutes field and proper add_ons
   async function handleComplete(id: string, earnings: number, bookingData?: any) {
     const bookingToUpdate = localBookings.find(b => b.id === id)
     
@@ -99,6 +134,14 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
         total_price: bookingData?.total_price || bookingToUpdate?.total_price
       }).eq('id', id)
       
+      // Notify Client
+      if (bookingToUpdate?.users?.telegram_id) {
+        await sendTelegramNotice(
+          bookingToUpdate.users.telegram_id, 
+          `✨ Your session at King's Massage is complete. Thank you for choosing us! Please visit the website to leave a review.`
+        );
+      }
+      
       router.refresh()
     } catch (err) {
       console.error('Complete failed:', err)
@@ -116,13 +159,16 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
     .filter(b => b.status === 'completed' && new Date(b.created_at) >= monthStart && new Date(b.created_at) <= monthEnd)
     .reduce((sum, b) => sum + (b.earnings || 0), 0)
 
-  // Filters
+  // Filters with improved name logic
   const filteredBookings = localBookings.filter(booking => {
     const searchLower = searchQuery.toLowerCase().trim()
+    const telegramName = booking.users?.telegram_username?.toLowerCase() || ""
+    
     return searchLower === '' || 
            booking.name.toLowerCase().includes(searchLower) ||
            booking.service.toLowerCase().includes(searchLower) ||
-           booking.users.email.toLowerCase().includes(searchLower)
+           booking.users.email.toLowerCase().includes(searchLower) ||
+           telegramName.includes(searchLower)
   }).filter(booking => bookingFilter === 'all' || booking.status === bookingFilter)
 
   const filteredUsers = users.filter(user => {
@@ -144,7 +190,6 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
         <div className="container mx-auto max-w-6xl">
           {/* Dashboard Stats Header */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            {/* Pending Bookings */}
             <Card className="bg-white shadow-sm ring-1 ring-slate-100 rounded-2xl">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
@@ -159,7 +204,6 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
               </CardContent>
             </Card>
 
-            {/* Approved Bookings */}
             <Card className="bg-white shadow-sm ring-1 ring-slate-100 rounded-2xl">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
@@ -174,7 +218,6 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
               </CardContent>
             </Card>
 
-            {/* Completed Sessions */}
             <Card className="bg-white shadow-sm ring-1 ring-slate-100 rounded-2xl">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
@@ -189,7 +232,6 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
               </CardContent>
             </Card>
 
-            {/* Monthly Earnings */}
             <Card className="bg-white shadow-sm ring-1 ring-slate-100 rounded-2xl">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
@@ -205,7 +247,6 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
             </Card>
           </div>
 
-          {/* Main Content Tabs */}
           <Tabs defaultValue="bookings" value={activeTab} onValueChange={setActiveTab} className="mb-8">
             <TabsList className="grid w-full md:w-auto grid-cols-2 mb-6">
               <TabsTrigger value="bookings" className="flex items-center gap-2">
@@ -226,7 +267,6 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
               </TabsTrigger>
             </TabsList>
 
-            {/* Bookings Tab Content */}
             <TabsContent value="bookings" className="space-y-4">
               <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
                 <h3 className="text-lg font-semibold">Bookings {bookingFilter !== 'all' ? `(${bookingFilter})` : ''}</h3>
@@ -245,7 +285,6 @@ export function AdminDashboard({ bookings, users }: AdminDashboardProps) {
               />
             </TabsContent>
 
-            {/* Clients Tab Content */}
             <TabsContent value="clients">
               <h3 className="text-lg font-semibold mb-4">Registered Clients ({totalClients})</h3>
               <ClientsList users={filteredUsers} bookings={localBookings} />
